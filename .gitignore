@@ -67,3 +67,5 @@ target/
 *.xml
 
 *.iml
+
+*.zip
