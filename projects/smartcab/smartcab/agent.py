@@ -2,6 +2,7 @@ import random
 from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
+import numpy as np
 
 class LearningAgent(Agent):
     """An agent that learns to drive in the smartcab world."""
@@ -10,7 +11,11 @@ class LearningAgent(Agent):
         super(LearningAgent, self).__init__(env)  # sets self.env = env, state = None, next_waypoint = None, and a default color
         self.color = 'red'  # override color
         self.planner = RoutePlanner(self.env, self)  # simple route planner to get next_waypoint
+        self.state = "start"
+
         # TODO: Initialize any additional variables here
+        self.qtable = np.zeros((5, 5)) # init the qtable
+
         random.seed(999)
 
     def reset(self, destination=None):
@@ -24,6 +29,8 @@ class LearningAgent(Agent):
         deadline = self.env.get_deadline(self)
 
         # TODO: Update state
+        possible_states = ["start", "termination", "valid_move", "invalid_move", "traffic_violation"]
+        self.state = "invalid move"
 
         # TODO: Select action according to your policy
         possible_directions = [None, 'forward', 'left', 'right'];
