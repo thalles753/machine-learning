@@ -3,6 +3,7 @@ from environment import Agent, Environment
 from planner import RoutePlanner
 from simulator import Simulator
 import numpy as np
+import pandas as pd
 
 class LearningAgent(Agent):
     """An agent that learns to drive in the smartcab world."""
@@ -16,17 +17,19 @@ class LearningAgent(Agent):
         self.possible_actions = [None, 'forward', 'left', 'right'];
         self.valid_states = self.get_states()
         self.init_QTable()
-
+        self.alpha = 1.0
+        self.time_step = 1.0
+        self.random_action_prob = 1.0
         random.seed(999)
 
     def print_QTable(self):
-        for state in self.valid_states:
-            print state, self.QTable[state]
+        for state, values in self.QTable.iteritems():
+            print state, values
 
     def init_QTable(self):
         self.QTable = {}
-        for state in self.valid_states:
-            self.QTable[state] =  np.array([0.,0.,0.,0.])
+        #for state in self.valid_states:
+        #    self.QTable[state] = np.array([0., 0., 0., 0.])
 
     def get_QValue(self, state, action):
         return self.QTable[state][self.get_action_index(action)]
@@ -39,7 +42,9 @@ class LearningAgent(Agent):
     def reset(self, destination=None):
         self.planner.route_to(destination)
         # TODO: Prepare for a new trip; reset any variables here, if required
-        self.init_QTable()
+        # self.init_QTable()
+        # self.alpha = 1.0
+        # self.time_step
 
     def update(self, t):
         # Gather inputs
@@ -50,9 +55,17 @@ class LearningAgent(Agent):
         self.state = self.get_current_state_based_on_input(inputs)
         print "Departing from: ", self.state
 
-        # TODO: Select action according to your policy
-        action = self.possible_actions[random.randrange(0, 4, 1)]
+        if self.state not in self.QTable:
+            self.QTable[self.state] =  np.array([0.,0.,0.,0.])
 
+        # TODO: Select action according to your policy
+        if (random.random() < self.random_action_prob):
+            print "Random action"
+            action = self.possible_actions[random.randrange(0, 4, 1)]
+        else:
+            print "Q action: ", np.argmax(self.QTable[self.state])
+            action = self.get_action_index(np.argmax(self.QTable[self.state]))
+            print "Move to: ", action
         # Execute action and get reward
         reward = self.env.act(self, action)
 
@@ -61,19 +74,28 @@ class LearningAgent(Agent):
         # TODO: Learn policy based on state, action, reward
         self.updateQValue(action, reward)
 
-        #print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
+        self.time_step += 1
+        self.alpha = self.alpha / self.time_step
+
+        if self.time_step % 20 == 0 and self.random_action_prob > 0.2:
+            self.random_action_prob -= 0.1
+
 
     def updateQValue(self, action, reward):
         previous_state = self.state
-        alpha = 0.5
 
         inputs = self.env.sense(self)
         current_state = self.get_current_state_based_on_input(inputs)
-        print current_state
+        print "Current state: ", current_state
         #print "Previous State:", previous_state, "QValue:", self.get_QValue(previous_state, action)
 
+        if current_state not in self.QTable:
+            self.QTable[current_state] =  np.array([0.,0.,0.,0.])
+
+        print "Alpha: ", self.alpha
+
         # Q(s, a) += alpha * (reward(s,a) + max(Q(s') - Q(s,a))
-        self.QTable[previous_state][self.get_action_index(action)] += alpha * (reward + np.max(self.QTable[current_state] - self.get_QValue(previous_state, action)))
+        self.QTable[previous_state][self.get_action_index(action)] += self.alpha * (reward + np.max(self.QTable[current_state] - self.get_QValue(previous_state, action)))
 
         #print "Current State:", current_state, "QValue:", self.get_QValue(previous_state, action)
 
@@ -81,17 +103,9 @@ class LearningAgent(Agent):
 
         #print "State: {}, Action: {}, Reward: {}, Current State: {}".format(previous_state, action, reward, current_state)
 
-    # def get_current_state_based_on_input(self, inputs):
-    #     current_state = inputs["light"] + "_light"
-    #     if current_state == "red_light":
-    #         if inputs["oncoming"] == "left":
-    #             current_state += "_oncoming" + "_going_" + str(inputs["oncoming"])
-    #         elif inputs["oncoming"] == None:
-    #             if inputs["left"] == 'forward':
-    #                 current_state += "_left" + "_going_" + str(inputs["left"])
-    #     elif inputs["oncoming"] == 'forward': # green_light
-    #         current_state += "_oncomming" + "_going_" + str(inputs["oncoming"])
-    #     return current_state
+    def get_next_move(self):
+        return np.argmax(self.QTable[self.state])
+
 
     def get_current_state_based_on_input(self, inputs):
         current_state = inputs["light"] + "_light"
