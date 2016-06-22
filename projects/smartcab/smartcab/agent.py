@@ -16,12 +16,11 @@ class LearningAgent(Agent):
         # TODO: Initialize any additional variables here
         # put None as the last because if more than one action has equal valus in the Q table it will always pick the first one - thus always prioritizing some movement in this scenario
         self.possible_actions = ['forward', 'left', 'right', None];
-        self.valid_states = self.get_states()
         self.init_QTable()
         self.initial_learning_rate = 1.0
-        self.discount_factor = 0.8
+        self.discount_factor = 0.7
         self.time_step = 1.0
-        self.initial_rand_action_prob = 1.0
+        self.initial_rand_action_prob = 0.2
 
         random.seed(999)
 
@@ -31,8 +30,6 @@ class LearningAgent(Agent):
 
     def init_QTable(self):
         self.QTable = {}
-        #for state in self.valid_states:
-        #    self.QTable[state] = np.array([0., 0., 0., 0.])
 
     def get_QValue(self, state, action):
         return self.QTable[state][self.get_action_index(action)]
@@ -62,6 +59,8 @@ class LearningAgent(Agent):
 
         # TODO: Select action according to your policy
         action = self.select_action_according_to_policy()
+        #action = self.get_random_action()
+        #action = action = self.possible_actions[np.argmax(self.QTable[self.state])]
 
         # Execute action and get reward
         reward = self.env.act(self, action)
@@ -87,37 +86,23 @@ class LearningAgent(Agent):
         alpha = self.initial_learning_rate / self.time_step
         self.time_step += 1
 
-        # Q(s, a) += alpha * (reward(s,a) + max(Q(s') - Q(s,a))
-        # self.QTable[previous_state][self.get_action_index(action)] += 0.5 * (reward + np.max(self.QTable[current_state]) - self.get_QValue(previous_state, action))
-
         # Q(state, action) = R(state, action) + Gamma * Max[Q(next state, all actions)]
         self.QTable[previous_state][self.get_action_index(action)] = (1 - alpha) * self.QTable[previous_state][self.get_action_index(action)] + alpha * (reward + self.discount_factor * np.max(self.QTable[current_state]))
 
-        print self.print_QTable()
+        # sprint self.print_QTable()
 
-        #print "State: {}, Action: {}, Reward: {}, Current State: {}".format(previous_state, action, reward, current_state)
+        # print "State: {}, Action: {}, Reward: {}, Current State: {}".format(previous_state, action, reward, current_state)
 
     def get_next_move(self):
         return np.argmax(self.QTable[self.state])
 
     def get_current_state_based_on_input(self, inputs):
-        return 'light: {}, left: {}, oncoming: {}, nextwaypoiint: {}'.format(inputs['light'],
+        return 'light: {}, left: {}, oncoming: {}, right {}, nextwaypoint: {}'.format(inputs['light'],
                 inputs['left'],
                 inputs['oncoming'],
+                inputs['right'],
                 self.next_waypoint)
 
-    def get_states(self):
-        lights = ["green_light", "red_light"]
-        directions = ['oncoming', 'right', 'left']
-        destinations = ['forward', 'left', 'right']
-        states = []
-        for l in lights:
-            for d in directions:
-                for dest in destinations:
-                    states.append(l + "_" + d + "_going_" + dest)
-        states.append(lights[0])
-        states.append(lights[1])
-        return states
 
     # Take some random actions based on probability
     def select_action_according_to_policy(self):
@@ -126,15 +111,9 @@ class LearningAgent(Agent):
             print "Probability rate decay: ", prob_rate_decay
             return self.get_random_action()
         else:
-            values = list(self.QTable[self.state])
-            maximum = sorted(values)[-2:]
-            if maximum[0] == maximum[1]:
-                print "More than one max, Pick a random action. Maximuns: {} == {} ".format(maximum[0],  maximum[1])
-                return self.get_random_action()
-            else:
-                action = self.possible_actions[np.argmax(self.QTable[self.state])]
-                print "Q learning policy action: ", action
-                return action
+            action = self.possible_actions[np.argmax(self.QTable[self.state])]
+            print "Q learning policy action: ", action
+            return action
 
     def get_random_action(self):
         action = self.possible_actions[random.randrange(0, 4, 1)]
@@ -147,7 +126,7 @@ def run():
     # Set up environment and agent
     e = Environment()  # create environment (also adds some dummy traffic)
     a = e.create_agent(LearningAgent)  # create agent
-    e.set_primary_agent(a, enforce_deadline=False)  # specify agent to track
+    e.set_primary_agent(a, enforce_deadline=True)  # specify agent to track
     # NOTE: You can set enforce_deadline=False while debugging to allow longer trials
 
     # Now simulate it
@@ -157,6 +136,7 @@ def run():
     sim.run(n_trials=100)  # run for a specified number of trials
     # NOTE: To quit midway, press Esc or close pygame window, or hit Ctrl+C on the command-line
 
+    print "Percentage completed: ", e.completed_trials / 100.0
 
 if __name__ == '__main__':
     run()
