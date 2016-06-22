@@ -2,6 +2,7 @@ import os
 import time
 import random
 import importlib
+import pandas as pd
 
 class Simulator(object):
     """Simulates agents in a dynamic smartcab environment.
