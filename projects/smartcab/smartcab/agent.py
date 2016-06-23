@@ -64,7 +64,7 @@ class LearningAgent(Agent):
         # Execute action and get reward
         reward = self.env.act(self, action)
 
-        print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
+        #print "LearningAgent.update(): deadline = {}, inputs = {}, action = {}, reward = {}".format(deadline, inputs, action, reward)  # [debug]
 
         # TODO: Learn policy based on state, action, reward
         self.updateQValue(action, reward, t+1)
@@ -88,9 +88,9 @@ class LearningAgent(Agent):
         # self.QTable[previous_state][self.get_action_index(action)] += alpha * (reward + self.discount_factor * np.max(self.QTable[current_state]) - self.QTable[previous_state][self.get_action_index(action)])
 
         # Q(state, action) = R(state, action) + Gamma * Max[Q(next state, all actions)]
-        self.QTable[previous_state][self.get_action_index(action)] = (1.0 - alpha) * self.QTable[previous_state][self.get_action_index(action)] + alpha * (reward + np.max(self.QTable[current_state]))
+        self.QTable[previous_state][self.get_action_index(action)] = (1.0 - alpha) * self.QTable[previous_state][self.get_action_index(action)] + alpha * (reward + self.discount_factor * np.max(self.QTable[current_state]))
 
-        print self.print_QTable()
+        # print self.print_QTable()
 
         # print "State: {}, Action: {}, Reward: {}, Current State: {}".format(previous_state, action, reward, current_state)
 
@@ -146,16 +146,18 @@ def run():
     """Run the agent for a finite number of trials."""
     # Set up environment and agent
     e = Environment()  # create environment (also adds some dummy traffic)
-    a = e.create_agent(LearningAgent, learning_rate=0.5, discount_factor=0.7, greedy_policy=0.1 )  # create agent
+    a = e.create_agent(LearningAgent, learning_rate=1.0, discount_factor=0.7, greedy_policy=0.1 )  # create agent
     e.set_primary_agent(a, enforce_deadline=True)  # specify agent to track
     # NOTE: You can set enforce_deadline=False while debugging to allow longer trials
 
     # Now simulate it
     sim = Simulator(e, update_delay=0.001, display=True)  # create simulator (uses pygame when display=True, if available)
-    # NOTE: To speed up simulation, reduce update_delay and/or set display=False
 
+    # NOTE: To speed up simulation, reduce update_delay and/or set display=False
     sim.run(n_trials=100)  # run for a specified number of trials
     print "Percentage completed: ", e.completed_trials / 100.0
+
+
 
     # NOTE: To quit midway, press Esc or close pygame window, or hit Ctrl+C on the command-line
 
