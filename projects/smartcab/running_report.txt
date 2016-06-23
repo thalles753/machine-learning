@@ -1,335 +1,60 @@
-Learning rate: 0.5
-Discount factor: 0.4
-Greedy Policy: 0.1
-Percentage completed:  0.76 
-
-Learning rate: 0.5
-Discount factor: 0.4
-Greedy Policy: 0.2
-Percentage completed:  0.76 
-
-Learning rate: 0.5
-Discount factor: 0.4
-Greedy Policy: 0.3
-Percentage completed:  0.75 
-
-Learning rate: 0.6
-Discount factor: 0.4
-Greedy Policy: 0.1
-Percentage completed:  0.76 
-
-Learning rate: 0.6
-Discount factor: 0.4
-Greedy Policy: 0.2
-Percentage completed:  0.68 
-
-Learning rate: 0.6
-Discount factor: 0.4
-Greedy Policy: 0.3
-Percentage completed:  0.65 
-
-Learning rate: 0.7
-Discount factor: 0.4
-Greedy Policy: 0.1
-Percentage completed:  0.76 
-
-Learning rate: 0.7
-Discount factor: 0.4
-Greedy Policy: 0.2
-Percentage completed:  0.7 
-
-Learning rate: 0.7
-Discount factor: 0.4
-Greedy Policy: 0.3
-Percentage completed:  0.73 
-
-Learning rate: 0.8
-Discount factor: 0.4
-Greedy Policy: 0.1
-Percentage completed:  0.82 
-
-Learning rate: 0.8
-Discount factor: 0.4
-Greedy Policy: 0.2
-Percentage completed:  0.7 
-
-Learning rate: 0.8
-Discount factor: 0.4
-Greedy Policy: 0.3
-Percentage completed:  0.74 
-
-Learning rate: 0.9
-Discount factor: 0.4
-Greedy Policy: 0.1
-Percentage completed:  0.78 
-
-Learning rate: 0.9
-Discount factor: 0.4
-Greedy Policy: 0.2
-Percentage completed:  0.73 
-
-Learning rate: 0.9
-Discount factor: 0.4
-Greedy Policy: 0.3
-Percentage completed:  0.74 
-
-Learning rate: 0.5
-Discount factor: 0.5
-Greedy Policy: 0.1
-Percentage completed:  0.86 
-
-Learning rate: 0.5
-Discount factor: 0.5
-Greedy Policy: 0.2
-Percentage completed:  0.73 
-
-Learning rate: 0.5
-Discount factor: 0.5
-Greedy Policy: 0.3
-Percentage completed:  0.76 
-
-Learning rate: 0.6
-Discount factor: 0.5
-Greedy Policy: 0.1
-Percentage completed:  0.77 
-
-Learning rate: 0.6
-Discount factor: 0.5
-Greedy Policy: 0.2
-Percentage completed:  0.7 
-
-Learning rate: 0.6
-Discount factor: 0.5
-Greedy Policy: 0.3
-Percentage completed:  0.72 
-
-Learning rate: 0.7
-Discount factor: 0.5
-Greedy Policy: 0.1
-Percentage completed:  0.77 
-
-Learning rate: 0.7
-Discount factor: 0.5
-Greedy Policy: 0.2
-Percentage completed:  0.78 
-
-Learning rate: 0.7
-Discount factor: 0.5
-Greedy Policy: 0.3
-Percentage completed:  0.7 
-
-Learning rate: 0.8
-Discount factor: 0.5
-Greedy Policy: 0.1
-Percentage completed:  0.78 
-
-Learning rate: 0.8
-Discount factor: 0.5
-Greedy Policy: 0.2
-Percentage completed:  0.72 
-
-Learning rate: 0.8
-Discount factor: 0.5
-Greedy Policy: 0.3
-Percentage completed:  0.67 
-
-Learning rate: 0.9
-Discount factor: 0.5
-Greedy Policy: 0.1
-Percentage completed:  0.72 
-
-Learning rate: 0.9
-Discount factor: 0.5
-Greedy Policy: 0.2
-Percentage completed:  0.75 
-
-Learning rate: 0.9
-Discount factor: 0.5
-Greedy Policy: 0.3
-Percentage completed:  0.7 
-
-Learning rate: 0.5
-Discount factor: 0.6
-Greedy Policy: 0.1
-Percentage completed:  0.72 
-
-Learning rate: 0.5
-Discount factor: 0.6
-Greedy Policy: 0.2
-Percentage completed:  0.71 
-
-Learning rate: 0.5
-Discount factor: 0.6
-Greedy Policy: 0.3
-Percentage completed:  0.7 
-
 Learning rate: 0.6
 Discount factor: 0.6
 Greedy Policy: 0.1
-Percentage completed:  0.72 
+Percentage completed:  0.94 
 
 Learning rate: 0.6
 Discount factor: 0.6
 Greedy Policy: 0.2
-Percentage completed:  0.77 
-
-Learning rate: 0.6
-Discount factor: 0.6
-Greedy Policy: 0.3
-Percentage completed:  0.72 
+Percentage completed:  0.18 
 
 Learning rate: 0.7
 Discount factor: 0.6
 Greedy Policy: 0.1
-Percentage completed:  0.8 
+Percentage completed:  0.0 
 
 Learning rate: 0.7
 Discount factor: 0.6
 Greedy Policy: 0.2
-Percentage completed:  0.73 
-
-Learning rate: 0.7
-Discount factor: 0.6
-Greedy Policy: 0.3
-Percentage completed:  0.71 
+Percentage completed:  0.0 
 
 Learning rate: 0.8
 Discount factor: 0.6
 Greedy Policy: 0.1
-Percentage completed:  0.8 
+Percentage completed:  0.0 
 
 Learning rate: 0.8
 Discount factor: 0.6
 Greedy Policy: 0.2
-Percentage completed:  0.8 
-
-Learning rate: 0.8
-Discount factor: 0.6
-Greedy Policy: 0.3
-Percentage completed:  0.66 
+Percentage completed:  0.0 
 
 Learning rate: 0.9
 Discount factor: 0.6
 Greedy Policy: 0.1
-Percentage completed:  0.79 
+Percentage completed:  0.0 
 
 Learning rate: 0.9
 Discount factor: 0.6
 Greedy Policy: 0.2
-Percentage completed:  0.77 
+Percentage completed:  0.0 
 
-Learning rate: 0.9
+Learning rate: 1.0
 Discount factor: 0.6
-Greedy Policy: 0.3
-Percentage completed:  0.77 
-
-Learning rate: 0.5
-Discount factor: 0.7
 Greedy Policy: 0.1
-Percentage completed:  0.16 
+Percentage completed:  0.0 
 
-Learning rate: 0.5
-Discount factor: 0.7
-Greedy Policy: 0.2
-Percentage completed:  0.07 
-
-Learning rate: 0.5
-Discount factor: 0.7
-Greedy Policy: 0.3
-Percentage completed:  0.01 
-
-Learning rate: 0.6
-Discount factor: 0.7
-Greedy Policy: 0.1
-Percentage completed:  0.01 
-
-Learning rate: 0.6
-Discount factor: 0.7
+Learning rate: 1.0
+Discount factor: 0.6
 Greedy Policy: 0.2
 Percentage completed:  0.0 
 
 Learning rate: 0.6
 Discount factor: 0.7
-Greedy Policy: 0.3
-Percentage completed:  0.0 
-
-Learning rate: 0.7
-Discount factor: 0.7
 Greedy Policy: 0.1
-Percentage completed:  0.0 
-
-Learning rate: 0.7
-Discount factor: 0.7
-Greedy Policy: 0.2
-Percentage completed:  0.0 
-
-Learning rate: 0.7
-Discount factor: 0.7
-Greedy Policy: 0.3
-Percentage completed:  0.0 
-
-Learning rate: 0.8
-Discount factor: 0.7
-Greedy Policy: 0.1
-Percentage completed:  0.0 
-
-Learning rate: 0.8
-Discount factor: 0.7
-Greedy Policy: 0.2
-Percentage completed:  0.0 
-
-Learning rate: 0.8
-Discount factor: 0.7
-Greedy Policy: 0.3
-Percentage completed:  0.0 
-
-Learning rate: 0.9
-Discount factor: 0.7
-Greedy Policy: 0.1
-Percentage completed:  0.0 
-
-Learning rate: 0.9
-Discount factor: 0.7
-Greedy Policy: 0.2
-Percentage completed:  0.0 
-
-Learning rate: 0.9
-Discount factor: 0.7
-Greedy Policy: 0.3
-Percentage completed:  0.0 
-
-Learning rate: 0.5
-Discount factor: 0.75
-Greedy Policy: 0.1
-Percentage completed:  0.0 
-
-Learning rate: 0.5
-Discount factor: 0.75
-Greedy Policy: 0.2
-Percentage completed:  0.0 
-
-Learning rate: 0.5
-Discount factor: 0.75
-Greedy Policy: 0.3
-Percentage completed:  0.14 
-
-Learning rate: 0.6
-Discount factor: 0.75
-Greedy Policy: 0.1
-Percentage completed:  0.08 
-
-Learning rate: 0.6
-Discount factor: 0.75
-Greedy Policy: 0.2
 Percentage completed:  0.0 
 
 Learning rate: 0.6
-Discount factor: 0.75
-Greedy Policy: 0.3
-Percentage completed:  0.02 
-
-Learning rate: 0.7
-Discount factor: 0.75
-Greedy Policy: 0.1
-Percentage completed:  0.03 
+Discount factor: 0.7
+Greedy Policy: 0.2
+Percentage completed:  0.0 
 

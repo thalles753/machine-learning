@@ -30,18 +30,18 @@ class LearningAgent(Agent):
     def init_QTable(self):
         self.QTable = {}
 
+    # get the QValue for that state/action
     def get_QValue(self, state, action):
         return self.QTable[state][self.get_action_index(action)]
 
+    # given an action return its index
     def get_action_index(self, action):
-        for idx, act in enumerate(self.possible_actions):
-            if action == act:
-                return idx
+        return self.possible_actions.index(action)
 
     def reset(self, destination=None):
         self.planner.route_to(destination)
         # TODO: Prepare for a new trip; reset any variables here, if required
-        self.init_QTable()
+        #self.init_QTable()
 
     def update(self, t):
         # Gather inputs
@@ -56,10 +56,9 @@ class LearningAgent(Agent):
             self.QTable[self.state] = np.array([0.,0.,0.,0.])
 
         # TODO: Select action according to your policy
-        action = self.select_action_according_to_policy(t+1)
-        #action = self.choose_action(t+1)
-        #action = self.get_random_action()
+        #action = random.choice(self.possible_actions)
         #action = action = self.possible_actions[np.argmax(self.QTable[self.state])]
+        action = self.select_action_according_to_policy(t+1)
 
         # Execute action and get reward
         reward = self.env.act(self, action)
@@ -69,44 +68,45 @@ class LearningAgent(Agent):
         # TODO: Learn policy based on state, action, reward
         self.updateQValue(action, reward, t+1)
 
-    def exponential_decay(self, learning_rate, global_step, decay_steps, decay_rate):
-        decayed_learning_rate = learning_rate * decay_rate ** (global_step / decay_steps)
+    # perform an exponential decay method
+    def exponential_decay(self, initial_rate, global_step, decay_steps, decay_rate, staircase=False):
+        div = global_step / decay_steps
+        if staircase == True:
+            div = int(global_step / decay_steps)
+
+        decayed_learning_rate = initial_rate * decay_rate ** div
         return decayed_learning_rate
 
+    # perform the Q-Learning equation for each state/action
     def updateQValue(self, action, reward, time_step):
         previous_state = self.state
 
+        # get the new current state
         inputs = self.env.sense(self)
         current_state = self.get_current_state_based_on_input(inputs)
 
+        # if not there, add this state to the QTable
         if current_state not in self.QTable:
             self.QTable[current_state] =  np.array([0.,0.,0.,0.])
 
         alpha = self.initial_learning_rate / time_step
 
-        # Q(s, a) += alpha * (reward(s,a) + max(Q(s') - Q(s,a))
-        # self.QTable[previous_state][self.get_action_index(action)] += alpha * (reward + self.discount_factor * np.max(self.QTable[current_state]) - self.QTable[previous_state][self.get_action_index(action)])
-
         # Q(state, action) = R(state, action) + Gamma * Max[Q(next state, all actions)]
         self.QTable[previous_state][self.get_action_index(action)] = (1.0 - alpha) * self.QTable[previous_state][self.get_action_index(action)] + alpha * (reward + self.discount_factor * np.max(self.QTable[current_state]))
 
-        # print self.print_QTable()
-
+        print self.print_QTable()
         # print "State: {}, Action: {}, Reward: {}, Current State: {}".format(previous_state, action, reward, current_state)
 
-    def get_next_move(self):
-        return np.argmax(self.QTable[self.state])
-
+    # generate a state string based on the current input
     def get_current_state_based_on_input(self, inputs):
         return 'light: {}, oncoming {}, left: {}, nextwaypoint: {}'.format(inputs['light'],
                 inputs['oncoming'], inputs['left'],
                 self.next_waypoint)
 
-
+    # policy that defines the action selection
     def select_action_according_to_policy(self, time_step):
-        prob_rate_decay = self.exponential_decay(self.initial_greedy_policy, time_step, decay_steps=5, decay_rate=0.84)
-
-        if random.random() < prob_rate_decay:
+        epsilon = self.exponential_decay(self.initial_greedy_policy, time_step, decay_steps=1, decay_rate=0.86)
+        if random.random() < epsilon:
             action = random.choice(self.possible_actions)
             # print "[Exploration] Choosing random action:", action
         else:
@@ -126,49 +126,43 @@ class LearningAgent(Agent):
             action = self.possible_actions[action_index]
         return action
 
-    def get_random_action(self):
-        action = self.possible_actions[random.randrange(0, 3, 1)]
-        return action
-
 
 def run():
-    # f = open('basic_qlearning.txt', 'w')
+    f = open('running_report.txt', 'w')
 
     # setup various parameter combinations
-    # discount_factors = [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
-    # starting_learning_rates = [0.6, 0.7, 0.8, 0.9, 1.0]
-    # epsilon_greedy_policy = [0.05, 0.1, 0.2]
-    #
-    # for d_factor in discount_factors:
-    #     for alpha in starting_learning_rates:
-    #         for greedy_policy in epsilon_greedy_policy:
+    discount_factors = [0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
+    starting_learning_rates = [0.6, 0.7, 0.8, 0.9, 1.0]
+    epsilon_greedy_policy = [0.1, 0.2]
 
-    """Run the agent for a finite number of trials."""
-    # Set up environment and agent
-    e = Environment()  # create environment (also adds some dummy traffic)
-    a = e.create_agent(LearningAgent, learning_rate=1.0, discount_factor=0.7, greedy_policy=0.1 )  # create agent
-    e.set_primary_agent(a, enforce_deadline=True)  # specify agent to track
-    # NOTE: You can set enforce_deadline=False while debugging to allow longer trials
+    for d_factor in discount_factors:
+        for alpha in starting_learning_rates:
+            for greedy_policy in epsilon_greedy_policy:
 
-    # Now simulate it
-    sim = Simulator(e, update_delay=0.001, display=True)  # create simulator (uses pygame when display=True, if available)
+                """Run the agent for a finite number of trials."""
+                # Set up environment and agent
+                e = Environment()  # create environment (also adds some dummy traffic)
+                a = e.create_agent(LearningAgent, learning_rate=alpha, discount_factor=d_factor, greedy_policy=greedy_policy)  # create agent
+                e.set_primary_agent(a, enforce_deadline=True)  # specify agent to track
+                # NOTE: You can set enforce_deadline=False while debugging to allow longer trials
 
-    # NOTE: To speed up simulation, reduce update_delay and/or set display=False
-    sim.run(n_trials=100)  # run for a specified number of trials
-    print "Percentage completed: ", e.completed_trials / 100.0
+                # Now simulate it
+                sim = Simulator(e, update_delay=0.4, display=True)  # create simulator (uses pygame when display=True, if available)
 
+                number_of_trials = 100
 
+                # NOTE: To speed up simulation, reduce update_delay and/or set display=False
+                sim.run(n_trials=number_of_trials)  # run for a specified number of trials
 
-    # NOTE: To quit midway, press Esc or close pygame window, or hit Ctrl+C on the command-line
+                #NOTE: To quit midway, press Esc or close pygame window, or hit Ctrl+C on the command-line
+                print >> f, "Learning rate:", alpha
+                print >> f, "Discount factor:", d_factor
+                print >> f, "Greedy Policy:", greedy_policy
+                print >> f, "Percentage completed: ", e.completed_trials / 100.0, "\n"
 
-    #             print >> f, "Learning rate:", alpha
-    #             print >> f, "Discount factor:", d_factor
-    #             print >> f, "Greedy Policy:", greedy_policy
-    #             print >> f, "Percentage completed: ", e.completed_trials / 100.0, "\n"
-    #
-    #             f.flush()
-    #
-    # f.close()
+                f.flush()
+
+    f.close()
 
 if __name__ == '__main__':
     run()
