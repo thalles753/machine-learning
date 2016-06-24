@@ -20,6 +20,7 @@ class LearningAgent(Agent):
         self.initial_learning_rate = learning_rate
         self.discount_factor = discount_factor
         self.initial_greedy_policy = greedy_policy
+        self.completed_trials = 0
 
         random.seed(999)
 
@@ -68,6 +69,13 @@ class LearningAgent(Agent):
         # TODO: Learn policy based on state, action, reward
         self.updateQValue(action, reward, t+1)
 
+        # print self.print_QTable()
+
+        # check if the agent has reached the destination with positive reward
+        if self.env.trial_data['success'] == 1:
+            self.completed_trials += 1
+
+
     # perform an exponential decay method
     def exponential_decay(self, initial_rate, global_step, decay_steps, decay_rate, staircase=False):
         div = global_step / decay_steps
@@ -87,7 +95,7 @@ class LearningAgent(Agent):
 
         # if not there, add this state to the QTable
         if current_state not in self.QTable:
-            self.QTable[current_state] =  np.array([0.,0.,0.,0.])
+            self.QTable[current_state] = np.array([0.,0.,0.,0.])
 
         alpha = self.initial_learning_rate / time_step
 
@@ -107,8 +115,8 @@ class LearningAgent(Agent):
     def select_action_according_to_policy(self, time_step):
         epsilon = self.exponential_decay(self.initial_greedy_policy, time_step, decay_steps=1, decay_rate=0.86)
         if random.random() < epsilon:
-            action = random.choice(self.possible_actions)
-            # print "[Exploration] Choosing random action:", action
+            action = self.possible_actions[random.randint(0, 3)]
+            print "------ [Exploration] ------- Choosing random action:", action
         else:
             q_row = list(self.QTable[self.state])
             max_q_value = max(q_row)
@@ -126,14 +134,13 @@ class LearningAgent(Agent):
             action = self.possible_actions[action_index]
         return action
 
-
 def run():
     f = open('running_report.txt', 'w')
 
     # setup various parameter combinations
-    discount_factors = [0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0]
-    starting_learning_rates = [0.6, 0.7, 0.8, 0.9, 1.0]
-    epsilon_greedy_policy = [0.1, 0.2]
+    discount_factors = [0.5]
+    starting_learning_rates = [0.5]
+    epsilon_greedy_policy = [0.09]
 
     for d_factor in discount_factors:
         for alpha in starting_learning_rates:
@@ -147,7 +154,7 @@ def run():
                 # NOTE: You can set enforce_deadline=False while debugging to allow longer trials
 
                 # Now simulate it
-                sim = Simulator(e, update_delay=0.4, display=True)  # create simulator (uses pygame when display=True, if available)
+                sim = Simulator(e, update_delay=0, display=True)  # create simulator (uses pygame when display=True, if available)
 
                 number_of_trials = 100
 
@@ -158,10 +165,9 @@ def run():
                 print >> f, "Learning rate:", alpha
                 print >> f, "Discount factor:", d_factor
                 print >> f, "Greedy Policy:", greedy_policy
-                print >> f, "Percentage completed: ", e.completed_trials / 100.0, "\n"
+                print >> f, "Percentage completed: ", a.completed_trials / 100.0, "\n"
 
                 f.flush()
-
     f.close()
 
 if __name__ == '__main__':
