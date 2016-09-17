@@ -1,3 +1,18 @@
-# Project 5: Capstone
+# Project 5: Street view sequence recognition
 
-The Capstone Project for the Machine Learning Engineer Nanodegree does not have any requirements for code, libraries, or datasets. You are free to choose your project as you wish! For students who are unable to construct a capstone project on their own imagination, a pre-built project has been provided in `robot_motion_planning`.
+To reproduce the work please make sure you have python 2.7 along with the following libraries.
+
+- Tensorflow
+- Anaconda (Optional)
+- numpy
+- matlibplot
+- scipy
+- planar
+- PIL
+- h5py
+
+This package contains the following files
+    - DataProcessing.ipynb
+    - Model.ipynb
+    - Capstone Project Report.pdf
+    - README.md
