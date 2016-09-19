@@ -10,6 +10,9 @@ To reproduce the work please make sure you have python 2.7 along with the follow
 - planar
 - PIL
 - h5py
+- sys
+- tarfile
+- os
 
 This package contains the following files
 
