@@ -1,9 +1,7 @@
 # Project 5: Street view sequence recognition
 
 The goal of this project is to provide a machine learning model that can interpret and recognize sequences of digits in real-world street images.
-![Image of Yaktocat](machine-learning/projects/capstone/sequence_recognition/images/fig1.PNG)
-
-
+![Image of Yaktocat](https://github.com/thalles753/machine-learning/blob/master/projects/capstone/sequence_recognition/images/fig1.PNG?raw=true)
 
 ## Data Exploration and Visualization
 The SVHN dataset, is used to train and evaluate the model proposed here. It consists of approximately 600,000 training digits and roughly 26,000 digits for testing. For more information refer to: http://ufldl.stanford.edu/housenumbers/.
