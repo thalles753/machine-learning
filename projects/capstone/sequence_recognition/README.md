@@ -1,7 +1,7 @@
 # Project 5: Street view sequence recognition
 
 The goal of this project is to provide a machine learning model that can interpret and recognize sequences of digits in real-world street images.
-![Image of Yaktocat](images/fig1.png)
+![Image of Yaktocat](./images/fig1.png)
 
 
 
