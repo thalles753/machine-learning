@@ -43,3 +43,5 @@ This package contains the following files:
 - Model.ipynb
 - Capstone Project Report.pdf
 - README.md
+
+First run the DataProcessing.ipynb jupyter notebook followed by the Model.ipynb.
