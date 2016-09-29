@@ -3,7 +3,7 @@ import pdb
 import agent as ag
 from time import sleep
 
-env = gym.make('SpaceInvaders-v0')
+env = gym.make('MsPacman-v0')
 agent = ag.LearningAgent(env)
 
 DELAY = 0.1
