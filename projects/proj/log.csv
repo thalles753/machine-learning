@@ -1,2 +1,1 @@
-Global_step,Game_number,Traning_step,Loss,Last_action,Random_prob,Total_reward,#_of_Random_actions,#_of_Conscious_actions
-1388,0,223,2.77369,LEFT,0.9992008,165.0,1389,0
+Global_step,Game_number,Traning_step,Loss,Last_action,Random_prob,#_of_Random_actions,#_of_Conscious_actions

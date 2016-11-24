@@ -9,6 +9,7 @@ class Network:
         self.outpt_size = output_size
         self.weights = {}
         self._input = tf.placeholder(tf.float32, shape=(None,) + (self.input_shape[0],self.input_shape[1],self.input_shape[2]), name="input_images")
+        self.create_model_variables()
         self.logits = self.model()
         self.create_weight_cp_ops()
 
@@ -52,52 +53,55 @@ class Network:
         for (var_name, var_placeholder) in self.weight_placeholders.iteritems():
             self.weight_copy_ops[var_name] = self.weights[var_name].assign(var_placeholder)
 
-    def model(self):
+    def create_model_variables(self):
         # The first hidden layer convolves 32 filters of 8 x 8 with stride 4 with the
         # input image and applies a rectifier nonlinearity
-        CONV1_DEPTH=32
-        W_conv1 = self.weight_conv_variable("conv1", [8, 8, self.input_shape[2], CONV1_DEPTH])
-        b_conv1 = self.bias_variable('conv1_bias', [CONV1_DEPTH])
-        self.weights[W_conv1.name] = W_conv1
-        self.weights[b_conv1.name] = b_conv1
+        CONV1_DEPTH = 32
+        self.W_conv1 = self.weight_conv_variable("conv1", [8, 8, self.input_shape[2], CONV1_DEPTH])
+        self.b_conv1 = self.bias_variable('conv1_bias', [CONV1_DEPTH])
+        self.weights[self.W_conv1.name] = self.W_conv1
+        self.weights[self.b_conv1.name] = self.b_conv1
 
         # The second hidden layer convolves 64 filters of 4 x 4
         # with stride 2, again followed by a rectifier nonlinearity
-        CONV2_DEPTH=64
-        W_conv2 = self.weight_conv_variable("conv2", [4, 4, CONV1_DEPTH, CONV2_DEPTH])
-        b_conv2 = self.bias_variable('conv2_bias',[CONV2_DEPTH])
-        self.weights[W_conv2.name] = W_conv2
-        self.weights[b_conv2.name] = b_conv2
+        CONV2_DEPTH = 64
+        self.W_conv2 = self.weight_conv_variable("conv2", [4, 4, CONV1_DEPTH, CONV2_DEPTH])
+        self.b_conv2 = self.bias_variable('conv2_bias', [CONV2_DEPTH])
+        self.weights[self.W_conv2.name] = self.W_conv2
+        self.weights[self.b_conv2.name] = self.b_conv2
 
         # This isfollowed by a third convolutional layer that convolves 64 filters of 3 x 3
         # with stride 1 followed by a rectifier
-        CONV3_DEPTH=64
-        W_conv3 = self.weight_conv_variable("conv3", [3, 3, CONV2_DEPTH, CONV3_DEPTH])
-        b_conv3 = self.bias_variable('conv3_bias',[CONV3_DEPTH])
-        self.weights[W_conv3.name] = W_conv3
-        self.weights[b_conv3.name] = b_conv3
+        CONV3_DEPTH = 64
+        self.W_conv3 = self.weight_conv_variable("conv3", [3, 3, CONV2_DEPTH, CONV3_DEPTH])
+        self.b_conv3 = self.bias_variable('conv3_bias', [CONV3_DEPTH])
+        self.weights[self.W_conv3.name] = self.W_conv3
+        self.weights[self.b_conv3.name] = self.b_conv3
 
         FC1_SIZE = 512
-        W_fc1 = self.weight_variable("fc1", [7 * 7 * CONV3_DEPTH, FC1_SIZE])
-        b_fc1 = self.bias_variable('fc1_bias',[FC1_SIZE])
-        self.weights[W_fc1.name] = W_fc1
-        self.weights[b_fc1.name] = b_fc1
+        self.W_fc1 = self.weight_variable("fc1", [7 * 7 * CONV3_DEPTH, FC1_SIZE])
+        self.b_fc1 = self.bias_variable('fc1_bias', [FC1_SIZE])
+        self.weights[self.W_fc1.name] = self.W_fc1
+        self.weights[self.b_fc1.name] = self.b_fc1
 
-        out_layer = self.weight_variable("readout_layer", [FC1_SIZE, self.outpt_size])
-        bias_layer = self.bias_variable('readout_layer_bias',[self.outpt_size])
-        self.weights[out_layer.name] = out_layer
-        self.weights[bias_layer.name] = bias_layer
+        self.out_layer = self.weight_variable("readself.out_layer", [FC1_SIZE, self.outpt_size])
+        self.bias_layer = self.bias_variable('readself.out_layer_bias', [self.outpt_size])
+        self.weights[self.out_layer.name] = self.out_layer
+        self.weights[self.bias_layer.name] = self.bias_layer
+        print "Model variables created."
+
+    def model(self):
 
         # convolves 32 8×8 filters with stride 4
-        h_conv1 = tf.nn.relu(self.conv2d(self._input, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1)
+        h_conv1 = tf.nn.relu(self.conv2d(self._input, self.W_conv1, strides=[1, 4, 4, 1], padding='VALID') + self.b_conv1)
         # h_pool1 = self.max_pool(h_conv1, strides=[1, 4, 4, 1])
         #print h_conv1
 
-        h_conv2 = tf.nn.relu(self.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2)
+        h_conv2 = tf.nn.relu(self.conv2d(h_conv1, self.W_conv2, strides=[1, 2, 2, 1], padding='VALID') + self.b_conv2)
         # h_pool2 = self.max_pool(h_conv2, strides=[1, 2, 2, 1])
         #print h_conv2
 
-        h_conv3 = tf.nn.relu(self.conv2d(h_conv2, W_conv3, strides=[1, 1, 1, 1], padding='VALID') + b_conv3)
+        h_conv3 = tf.nn.relu(self.conv2d(h_conv2, self.W_conv3, strides=[1, 1, 1, 1], padding='VALID') + self.b_conv3)
         # h_pool3 = self.max_pool(h_conv3, strides=[1, 1, 1, 1])
         #print h_conv3
 
@@ -105,7 +109,7 @@ class Network:
         h_pool_flat = tf.reshape(h_conv3, [-1, shape[1] * shape[2] * shape[3]])
 
         # First fully connected layer
-        h_fc1 = tf.nn.relu(tf.matmul(h_pool_flat, W_fc1) + b_fc1)
-        q_actions = tf.matmul(h_fc1, out_layer) + bias_layer
+        h_fc1 = tf.nn.relu(tf.matmul(h_pool_flat, self.W_fc1) + self.b_fc1)
+        q_actions = tf.matmul(h_fc1, self.out_layer) + self.bias_layer
 
         return q_actions
