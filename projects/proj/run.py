@@ -35,34 +35,35 @@ antarg.add_argument("--update_frequency", type=int, default=4, help="Perform tra
 antarg.add_argument("--target_network_update_frequency", type=int, default=10000, help="The frequency (measured in the number of SGD updates) with which the target network is updated.")
 
 mainarg = parser.add_argument_group('Main loop')
-mainarg.add_argument("--replay_start_size", type=int, default=50000, help="Populate replay memory with random steps before starting learning.")
+mainarg.add_argument("--replay_start_size", type=int, default=5000, help="Populate replay memory with random steps before starting learning.")
 mainarg.add_argument("--train_steps", type=int, default=250000, help="How many training steps per epoch.")
 mainarg.add_argument("--epochs", type=int, default=200, help="How many epochs to run.")
+mainarg.add_argument("--debug_epsode_size", type=int, default=20, help="How many games before calculating probabilities.")
 
 args = parser.parse_args()
 env = gym.make(args.game_name)
 
 agent = agent.LearningAgent(env, args)
 
-step = 0
-game_number = 0
-EPOCH_SIZE = 10
-for epoch in range(args.epochs):
+agent.play()
 
-    total_reward = 0
-
-    for train_step in range(args.train_steps):
-        done, reward = agent.update(step)
-        total_reward += reward
-        step += 1
-
-        if done:
-            game_number += 1
-
-            if game_number % EPOCH_SIZE == 0:
-                # write log
-                with open('average_score_per_epoch.txt', 'a+') as f:
-                    f.write(str(game_number) + "\t" + str(total_reward / EPOCH_SIZE) + "\n")
-                total_reward = 0
-
-    print("Epoch #", epoch, "has finished.")
+# step = 0
+# game_number = 0
+# EPOCH_SIZE = 10
+# total_reward = 0
+# TOTAL_STEPS = args.epochs * args.train_steps
+#
+# for step in range(50000000):
+#
+#     done, reward = agent.update(step)
+#     total_reward += reward
+#
+#     if done:
+#         game_number += 1
+#         agent.update(step)
+#
+#         if game_number % EPOCH_SIZE == 0:
+#             # write log
+#             with open('average_score_per_epoch.txt', 'a+') as f:
+#                 f.write(str(game_number) + "\t" + str(total_reward / EPOCH_SIZE) + "\n")
+#             total_reward = 0

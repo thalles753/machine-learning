@@ -4,11 +4,15 @@ import tensorflow as tf
 import numpy as np
 from collections import deque
 from scipy import misc
+from tensorflow.python.framework.dtypes import uint8
+from sklearn.preprocessing import scale
 import DQN
 import random
 import csv
 import matplotlib.pyplot as plt
-
+from skimage.color import rgb2gray
+import sys
+import pdb
 
 class LearningAgent:
     def __init__(self, env, args, mode="train"):
@@ -35,9 +39,9 @@ class LearningAgent:
         self.SHOW_DEBUG = 5
 
         # setup log file
-        with open(self.args.mode + 'log.csv', 'w+') as csvfile:
+        with open(self.args.mode + '_log.csv', 'w+') as csvfile:
             writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
-            fieldnames = ['Global_step', 'Game_number', 'Traning_step', 'Loss', 'Last_action', 'Random_prob','#_of_Random_actions', '#_of_Conscious_actions']
+            fieldnames = ['Global_step', 'Game_number', 'Traning_step','#_of_Random_actions', '#_of_Conscious_actions']
             writer.writerow(fieldnames)
 
         # Tensorflow variables
@@ -48,13 +52,15 @@ class LearningAgent:
         with tf.variable_scope("train") as self.target_scope:
             self.train_network = DQN.Network(network_input_shape, self.NUM_ACTIONS)
 
-        # target action-value function Q_hat
-        with tf.variable_scope("target") as self.train_scope:
-            self.target_network = DQN.Network(network_input_shape, self.NUM_ACTIONS)
-
         if self.args.mode == "train":
+
+            # target action-value function Q_hat
+            with tf.variable_scope("target") as self.train_scope:
+                self.target_network = DQN.Network(network_input_shape, self.NUM_ACTIONS)
+
             self._target = tf.placeholder(tf.float32, [None], name="input_targets")
             self._action = tf.placeholder(tf.float32, [None, self.NUM_ACTIONS], name="input_actions")
+
             readout_action = tf.reduce_sum(tf.mul(self.train_network.logits, self._action), reduction_indices=1)
 
             diff = self._target - readout_action
@@ -62,17 +68,20 @@ class LearningAgent:
             self.loss = tf.reduce_mean(tf.square(diff_clipped))
             loss_summary = tf.scalar_summary('loss', self.loss)
 
-            optimizer = tf.train.RMSPropOptimizer(learning_rate = self.args.learning_rate, epsilon=0.01, momentum=0.95, decay=0.95)
-            # optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=0.1)
+            optimizer = tf.train.RMSPropOptimizer(learning_rate = self.args.learning_rate, epsilon=0.01, momentum=0.95)
+            # optimizer = tf.train.AdamOptimizer(learning_rate=1e-6, epsilon=0.01)
             self.train_operation = optimizer.minimize(self.loss)
 
-            self.merged = tf.merge_summary([loss_summary])
+        if self.args.mode == "train":
+            self.image_summary = tf.image_summary("Input image", self.train_network.input, max_images=1)
+            self.merged = tf.merge_summary([loss_summary, self.image_summary])
             self.train_writer = tf.train.SummaryWriter('./summary', self._session.graph)
 
-        self._session.run(tf.initialize_all_variables())
+        self.combined_summary = tf.Summary()
 
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
+        self._session.run(tf.initialize_all_variables())
 
         self.game_initial_setup()
 
@@ -94,8 +103,8 @@ class LearningAgent:
 
     def compare_train_target_net_random_weight(self):
         current_state = np.expand_dims(self.state, axis=0)
-        target_logits = self._session.run(self.target_network.logits, feed_dict={self.target_network._input: current_state})
-        train_logits = self._session.run(self.train_network.logits, feed_dict={self.train_network._input: current_state})
+        target_logits = self._session.run(self.target_network.logits, feed_dict={self.target_network.input: current_state})
+        train_logits = self._session.run(self.train_network.logits, feed_dict={self.train_network.input: current_state})
         if np.array_equal(target_logits,train_logits):
             return True
         else:
@@ -115,6 +124,7 @@ class LearningAgent:
     def display_transition(self, memory):
         # displya post states
         states = [memory[0], memory[3]]
+        print "Is valid transition:", self.check_prev_post_state(memory[0], memory[3])
         id = 0
         f, axarr = plt.subplots(2, 4, figsize=(18,8))
         for state in states:
@@ -124,11 +134,30 @@ class LearningAgent:
             id += 1
         plt.show()
 
+    def display_current_state(self):
+        id = 0
+        f, axarr = plt.subplots(1, 4, figsize=(16,8))
+        for i in range(4):
+            axarr[id].imshow(self.state[:,:,id], cmap=plt.cm.Greys);
+            axarr[id].set_title("Current State")
+            id += 1
+        plt.show()
+
+    # debug routine
+    def show_minibatch(self, minibatch):
+        for transition in minibatch:
+            self.display_transition(transition)
+
+
     def train(self):
         # Sample random minibatch of transitions (s_i, a_i, r_i, s_i+1)
         # from the experience replay list
         mini_batch = random.sample(self.exp_replay_list, self.args.minibatch_size)
         assert(len(mini_batch) == self.args.minibatch_size)
+
+        # if self.train_step == 0:
+        #     print "Experience replay size:", len(self.exp_replay_list)
+        #     self.show_minibatch(mini_batch)
 
         previous_states = [d[0] for d in mini_batch]
         actions = [d[1] for d in mini_batch]
@@ -136,8 +165,10 @@ class LearningAgent:
         next_states = [d[3] for d in mini_batch]
         terminals = [d[4] for d in mini_batch]
 
+        actions_one_hot = self.to_one_hot_vec(actions)
+
         # clip rewards between -1 and 1
-        rewards = np.clip(rewards, a_min=-1.0, a_max=1.0)
+        rewards = np.clip(rewards, a_min=self.args.min_reward, a_max=self.args.max_reward)
 
         if self.train_step % self.args.target_network_update_frequency == 0:
             print "(Before) Are networks equal:", self.compare_train_target_net_random_weight()
@@ -147,7 +178,7 @@ class LearningAgent:
             print "(After) Are networks equal:", self.compare_train_target_net_random_weight()
 
         # this gives us the agents expected reward for each action we might take
-        post_state_qvalues = self._session.run(self.target_network.logits, feed_dict={self.target_network._input: next_states})
+        post_state_qvalues = self._session.run(self.target_network.logits, feed_dict={self.target_network.input: next_states})
         max_post_state_qvalues = np.max(post_state_qvalues, 1)
 
         agents_expected_reward = []
@@ -164,15 +195,18 @@ class LearningAgent:
                     rewards[i] + self.args.discount_factor * max_post_state_qvalues[i])
 
         # Perform a gradient descent step on (y_j − Q(s_j, a_j; θ))^2
-        summary, _, loss = self._session.run([self.merged, self.train_operation, self.loss], feed_dict={
-            self.train_network._input: previous_states,
-            self._action: self.to_one_hot_vec(actions),
+        summary, img_summary, _, loss = self._session.run([self.merged, self.image_summary, self.train_operation, self.loss], feed_dict={
+            self.train_network.input: previous_states,
+            self._action: actions_one_hot,
             self._target: agents_expected_reward})
 
+        self.combined_summary.MergeFromString(img_summary)
 
-        if self.train_step % self.UPDATE_TF_BOARD_EVERY == 0:
+        if self.train_step % self.UPDATE_TF_BOARD_EVERY == 0 and self.train_step > 0:
             print "Summary data has been written!!"
             self.train_writer.add_summary(summary, self.train_step)
+            self.train_writer.add_summary(self.combined_summary, self.train_step)
+            self.combined_summary = tf.Summary()
 
         self.train_step += 1
         return loss
@@ -193,7 +227,7 @@ class LearningAgent:
 
         for i in range(0,4):
             for j in range(0,4):
-                if np.array_equal(self.state[:,:,i], self.state[:,:,j]) == False:
+                if id(self.state[:,:,i]) == id(self.state[:,:,j]) == False:
                     exit("Not equal")
 
         self._env.frameskip = self.args.frame_skip
@@ -209,13 +243,13 @@ class LearningAgent:
             self.number_of_random_actions += 1
         else:
             current_state = np.expand_dims(self.state, axis=0)
-            q_action = self._session.run(self.train_network.logits, feed_dict={self.train_network._input: current_state})
+            q_action = self._session.run(self.train_network.logits, feed_dict={self.train_network.input: current_state})
             out = np.argmax(q_action)
             # print("Predicted action:", self.get_action_name(out))
             self.number_of_systematic_actions += 1
 
         self.rewards_distribution[self.get_action_name(out)] += 1
-        return out, p
+        return out
 
     # perform a linear decay operation
     def get_exploration_probability(self, global_step):
@@ -223,13 +257,11 @@ class LearningAgent:
                 max(0, (self.args.initial_exploration - self.args.final_exploration) *
                     (self.args.final_exploration_frame - max(0, global_step - self.args.replay_start_size)) / self.args.final_exploration_frame))
 
-
-    # returns a 84 x 84 x 4 image tensor as described in the deep minds paper
+    # returns a 84 x 84 image tensor as described in the deep minds paper
     def process_input(self, img):
         out = img[:195, :] # get only the playing area of the image
-        r, g, b = out[:,:,0], out[:,:,1], out[:,:,2]
-        out = r * (299./1000.) + r * (587./1000.) + b * (114./1000.)
-        out = misc.imresize(out, (self.args.screen_width, self.args.screen_height), interp="bilinear")
+        gray_image = rgb2gray(out)
+        out = misc.imresize(gray_image, (self.args.screen_width, self.args.screen_height), interp="bilinear")
         return out
 
     def process_rewards(self, reward):
@@ -238,63 +270,142 @@ class LearningAgent:
             return -10.0
         return reward
 
-    def update(self, step):
-        loss = 0
-        ep = 0
+    def play(self):
+        step = 0
+        game_number = 0
+        for epoch in range(self.args.epochs):
+            total_reward = 0
 
-        action, ep = self.get_next_action(step)
+            for _ in range(self.args.train_steps):
 
-        # Execute action a_t in emulator and observe reward r_t and image x_t+1
-        new_frame, reward, done, info = self._env.step(action)
+                while True:
+                    action = self.get_next_action(step)
 
-        reward = self.process_rewards(reward)
+                    # Execute action a_t in emulator and observe reward r_t and image x_t+1
+                    new_frame, reward, done, info = self._env.step(action)
+                    total_reward += reward
 
-        new_observation = np.expand_dims(self.process_input(new_frame), axis=2) # 84 x 84 x 1
-        next_state = np.array(self.state[:, :, 1:], copy=True)
-        next_state = np.append(next_state, new_observation, axis=2)
+                    reward = self.process_rewards(reward)
 
-        if self.args.mode == "train":
-            experience = [self.state, action, reward, next_state, done]
+                    new_observation = np.expand_dims(self.process_input(new_frame), axis=2) # 84 x 84 x 1
+                    next_state = np.array(self.state[:, :, 1:], copy=True)
+                    next_state = np.append(next_state, new_observation, axis=2)
 
-            # print self.check_prev_post_state(self.state, new_state)
-            # self.display_transition(experience)
+                    if self.args.mode == "train":
 
-            # store transition (φ_t, a_t, r_t, φ_t+1) in D (experience decay collection)
-            self.exp_replay_list.append(experience)
+                        experience = [self.state, action, reward, next_state, done]
 
-            # The agent has to select 4 actions between each SGD update
-            if step % self.args.update_frequency == 0:
-                # only train if done observing
-                if step >= self.args.replay_start_size:
+                        # store transition (φ_t, a_t, r_t, φ_t+1) in D (experience decay collection)
+                        self.exp_replay_list.append(experience)
 
-                    if self.train_step == 0:
-                        print "Starting training!"
+                        # The agent has to select 4 actions between each SGD update
+                        if step % self.args.update_frequency == 0:
+                            # only train if done observing
+                            if step >= self.args.replay_start_size:
 
-                    # Perform a gradient descent step on (y_j −Q(φ_j, a_j; θ))^2
-                    loss = self.train()
+                                if self.train_step == 0:
+                                    print "Starting training!"
 
-                    if self.train_step % self.SAVE_MODEL_EVERY == 0:
-                        save_path = self.saver.save(self._session, "./model/model.ckpt")
-                        print("Model Saved in file:", save_path, "Last step:", step)
+                                # Perform a gradient descent step on (y_j −Q(φ_j, a_j; θ))^2
+                                loss = self.train()
 
-        if done:
-            # write log data to a csv file
-            with open(self.args.mode + '_log.csv', 'a+') as csvfile:
-                writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
+                                if self.train_step % self.SAVE_MODEL_EVERY == 0:
+                                    save_path = self.saver.save(self._session, "./model/model.ckpt")
+                                    print("Model Saved in file:", save_path, "Last step:", step)
 
-                line = [str(step), str(self.game_number), str(self.train_step), \
-                        str(loss), str(self.get_action_name(action)), str(ep), \
-                        str(self.number_of_random_actions), \
-                        str(self.number_of_systematic_actions)]
-                writer.writerow(line)
+                    step += 1
+                    self.state = next_state
 
-            if self.game_number % self.SHOW_DEBUG == 0:
-                print self.rewards_distribution
-                self.rewards_distribution = dict([(key, 0) for key in self.ACTION_NAMES])
+                    if done:
+                        game_number += 1
+                        self.reset_env()
+                        break
 
-            self.game_number += 1
-            self.reset_debug_variables()
-            self.reset_env()
+                # write log data to a csv file for each completed game
+                with open(self.args.mode + '_log.csv', 'a+') as csvfile:
+                    writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
 
-        self.state = next_state
-        return done, reward
+                    line = [str(step), str(game_number), str(self.train_step), \
+                            str(self.number_of_random_actions), \
+                            str(self.number_of_systematic_actions)]
+                    writer.writerow(line)
+
+                self.reset_debug_variables()
+
+                if step % self.args.debug_epsode_size == 0 and step > 0:
+                    print self.rewards_distribution
+                    self.rewards_distribution = dict([(key, 0) for key in self.ACTION_NAMES])
+
+                    # write log
+                    with open(self.args.mode + '_average_score_per_epoch.txt', 'a+') as f:
+                        f.write(str(game_number) + "\t" + str(total_reward / self.args.debug_epsode_size) + "\n")
+                    total_reward = 0
+
+            # save the model by the end of each epoch
+            save_path = self.saver.save(self._session, "./model/model.ckpt")
+            print("Model Saved in file:", save_path, "Last step:", step)
+
+
+
+
+    # def update(self, step):
+    #     loss = 0
+    #     ep = 0
+    #
+    #     # if self.args.mode == "test":
+    #         # self._env.render()
+    #
+    #     action, ep = self.get_next_action(step)
+    #
+    #     # Execute action a_t in emulator and observe reward r_t and image x_t+1
+    #     new_frame, reward, done, info = self._env.step(action)
+    #
+    #     reward = self.process_rewards(reward)
+    #
+    #     new_observation = np.expand_dims(self.process_input(new_frame), axis=2) # 84 x 84 x 1
+    #     next_state = np.array(self.state[:, :, 1:], copy=True)
+    #     next_state = np.append(next_state, new_observation, axis=2)
+    #
+    #     if self.args.mode == "train":
+    #
+    #         experience = [self.state, action, reward, next_state, done]
+    #
+    #         # store transition (φ_t, a_t, r_t, φ_t+1) in D (experience decay collection)
+    #         self.exp_replay_list.append(experience)
+    #
+    #         # The agent has to select 4 actions between each SGD update
+    #         if step % self.args.update_frequency == 0:
+    #             # only train if done observing
+    #             if step >= self.args.replay_start_size:
+    #
+    #                 if self.train_step == 0:
+    #                     print "Starting training!"
+    #
+    #                 # Perform a gradient descent step on (y_j −Q(φ_j, a_j; θ))^2
+    #                 loss = self.train()
+    #
+    #                 if self.train_step % self.SAVE_MODEL_EVERY == 0:
+    #                     save_path = self.saver.save(self._session, "./model/model.ckpt")
+    #                     print("Model Saved in file:", save_path, "Last step:", step)
+    #
+    #     if done:
+    #         self.game_number += 1
+    #         # write log data to a csv file
+    #         with open(self.args.mode + '_log.csv', 'a+') as csvfile:
+    #             writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
+    #
+    #             line = [str(step), str(self.game_number), str(self.train_step), \
+    #                     str(loss), str(self.get_action_name(action)), str(ep), \
+    #                     str(self.number_of_random_actions), \
+    #                     str(self.number_of_systematic_actions)]
+    #             writer.writerow(line)
+    #
+    #         if self.game_number % self.SHOW_DEBUG == 0:
+    #             print self.rewards_distribution
+    #             self.rewards_distribution = dict([(key, 0) for key in self.ACTION_NAMES])
+    #
+    #         self.reset_debug_variables()
+    #         self.reset_env()
+    #
+    #     self.state = next_state
+    #     return done, reward

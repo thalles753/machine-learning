@@ -9,11 +9,11 @@ class Network:
         self.input_shape = input_shape
         self.outpt_size = output_size
         self.weights = {}
-        self._input = tf.placeholder(tf.float32,
-                                     shape=(None,) + (self.input_shape[0], self.input_shape[1], self.input_shape[2]),
-                                     name="input_images")
+        self.input = tf.placeholder(tf.float32,
+                             shape=(None,) + (input_shape[0], input_shape[1], input_shape[2]),
+                             name="input_images")
         self.create_model_variables()
-        self.logits = self.model()
+        self.logits = self.model(self.input)
         self.create_weight_cp_ops()
 
     def get_training_var_data(self, sess):
@@ -74,10 +74,10 @@ class Network:
 
         print "Model variables created."
 
-    def model(self):
+    def model(self, input):
 
         # convolves 32 8×8 filters with stride 4
-        h_conv1 = tf.nn.relu(self.conv2d(self._input, self.W_conv1, strides=[1, 4, 4, 1], padding='VALID'))
+        h_conv1 = tf.nn.relu(self.conv2d(input, self.W_conv1, strides=[1, 4, 4, 1], padding='VALID'))
 
         h_conv2 = tf.nn.relu(self.conv2d(h_conv1, self.W_conv2, strides=[1, 2, 2, 1], padding='VALID'))
 
