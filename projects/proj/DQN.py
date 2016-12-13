@@ -1,95 +1,75 @@
 # -*- coding: utf-8 -*-
 
 import tensorflow as tf
-
+import tensorflow.contrib.slim as slim
 
 class Network:
-    def __init__(self, input_shape, output_size):
-        self.SEED = 999
-        self.input_shape = input_shape
-        self.outpt_size = output_size
-        self.weights = {}
-        self.input = tf.placeholder(tf.float32,
-                             shape=(None,) + (input_shape[0], input_shape[1], input_shape[2]),
-                             name="input_images")
-        self.create_model_variables()
-        self.logits = self.model(self.input)
-        self.create_weight_cp_ops()
+    def __init__(self, args, output_size, scope):
+        self.args = args
+        self.scope = scope
+        input_shape = (args.screen_width, args.screen_height, args.agent_history_length) # 84 x 84 x 4
+        with tf.variable_scope(scope):
+            self.output_size = output_size
+            self._input = tf.placeholder(tf.float32,
+                                         shape=(None,) + (input_shape[0], input_shape[1], input_shape[2]),
+                                         name="input_images")
+            self._target = tf.placeholder(tf.float32, [None], name="input_targets")
+            self._action = tf.placeholder(tf.float32, [None, output_size], name="input_actions")
+            self._build_graph()
+            self.train_writer = tf.train.SummaryWriter('./summary/' + self.args.mode + "/")
+            self.total_reward_ph = tf.placeholder(tf.float32, [], name="total_reward_placeholder")
+            self.total_reward_summary = tf.scalar_summary(self.scope + '_total_reward', self.total_reward_ph)
 
-    def get_training_var_data(self, sess):
-        for (var_name, var) in self.weights.iteritems():
-            if var_name == 'train/conv1:0' or var_name == 'target/conv1:0':
-                return var.eval(session=sess)
+    def update_average_reward(self, sess, average_reward, game_number):
+        reward_summary = sess.run(self.total_reward_summary,
+                                  feed_dict={self.total_reward_ph: average_reward})
+        self.train_writer.add_summary(reward_summary, game_number)
 
-    def weight_variable(self, name, shape):
-        return tf.get_variable(name=name, shape=shape, initializer=tf.contrib.layers.xavier_initializer(seed=self.SEED))
+    def _build_graph(self):
 
-    def weight_conv_variable(self, name, shape):
-        return tf.get_variable(name=name, shape=shape,
-                               initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=self.SEED))
+        conv1 = slim.conv2d(self._input, 32, [8, 8], activation_fn=tf.nn.relu,
+                            padding='VALID', stride=4, biases_initializer=None)
 
-    def conv2d(self, x, W, strides=[1, 1, 1, 1], padding='SAME'):
-        return tf.nn.conv2d(x, W, strides=strides, padding=padding)
+        conv2 = slim.conv2d(conv1, 64, [4, 4], activation_fn=tf.nn.relu,
+                            padding='VALID', stride=2, biases_initializer=None)
 
-    def copy_weights(self, other_net, sess):
-        other_var_dir = other_net.weights
-        for (other_var_name, other_var) in other_var_dir.iteritems():
-            var_name = "target" + '/' + other_var_name.split('/', 1)[1]
-            other_var_eval = other_var.eval(session=sess)
-            sess.run(self.weight_copy_ops[var_name], feed_dict={self.weight_placeholders[var_name]: other_var_eval})
+        conv3 = slim.conv2d(conv2, 64, [3, 3], activation_fn=tf.nn.relu,
+                            padding='VALID', stride=1, biases_initializer=None)
 
-    def create_weight_cp_ops(self):
-        self.weight_placeholders = {}
-        for var_name in self.weights:
-            self.weight_placeholders[var_name] = tf.placeholder(tf.float32)
-        self.weight_copy_ops = {}
-        for (var_name, var_placeholder) in self.weight_placeholders.iteritems():
-            self.weight_copy_ops[var_name] = self.weights[var_name].assign(var_placeholder)
+        flattened = slim.flatten(conv3)
 
-    def create_model_variables(self):
-        # The first hidden layer convolves 32 filters of 8 x 8 with stride 4 with the
-        # input image and applies a rectifier nonlinearity
-        CONV1_DEPTH = 32
-        self.W_conv1 = self.weight_conv_variable("conv1", [8, 8, self.input_shape[2], CONV1_DEPTH])
-        self.weights[self.W_conv1.name] = self.W_conv1
+        fc1 = slim.fully_connected(flattened, 512, activation_fn=tf.nn.relu, biases_initializer=None)
 
-        # The second hidden layer convolves 64 filters of 4 x 4
-        # with stride 2, again followed by a rectifier nonlinearity
-        CONV2_DEPTH = 64
-        self.W_conv2 = self.weight_conv_variable("conv2", [4, 4, CONV1_DEPTH, CONV2_DEPTH])
-        self.weights[self.W_conv2.name] = self.W_conv2
+        self.predictions = slim.fully_connected(fc1, self.output_size, activation_fn=None, biases_initializer=None)
 
-        # This isfollowed by a third convolutional layer that convolves 64 filters of 3 x 3
-        # with stride 1 followed by a rectifier
-        CONV3_DEPTH = 64
-        self.W_conv3 = self.weight_conv_variable("conv3", [3, 3, CONV2_DEPTH, CONV3_DEPTH])
-        self.weights[self.W_conv3.name] = self.W_conv3
+        # Get the predictions for the chosen actions only
+        readout_action = tf.reduce_sum(tf.mul(self.predictions, self._action), reduction_indices=1)
 
-        FC1_SIZE = 512
-        self.W_fc1 = self.weight_variable("fc1", [7 * 7 * CONV3_DEPTH, FC1_SIZE])
-        self.weights[self.W_fc1.name] = self.W_fc1
+        diff = self._target - readout_action
+        diff_clipped = tf.clip_by_value(diff, -self.args.clip_error, self.args.clip_error)
+        self.loss = tf.reduce_mean(tf.square(diff_clipped))
 
-        self.out_layer = self.weight_variable("readout_layer", [FC1_SIZE, self.outpt_size])
-        self.weights[self.out_layer.name] = self.out_layer
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=0.00025, decay=0.95, epsilon=0.001)
+        # optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=0.1)
+        self.train_operation = optimizer.minimize(self.loss, global_step=tf.contrib.framework.get_global_step())
 
-        print "Model variables created."
+        self.merged = tf.merge_summary([
+            tf.scalar_summary('loss', self.loss),
+            tf.histogram_summary("q_values_history", self.predictions),
+            tf.scalar_summary('max_q_value', tf.reduce_max(self.predictions))
+        ])
 
-    def model(self, input):
+    def predict(self, sess, states):
+        return sess.run(self.predictions, {self._input: states})
 
-        # convolves 32 8×8 filters with stride 4
-        h_conv1 = tf.nn.relu(self.conv2d(input, self.W_conv1, strides=[1, 4, 4, 1], padding='VALID'))
+    def update(self, sess, states, actions_one_hot, targets, train_step):
+        # Perform a gradient descent step on (y_j − Q(s_j, a_j; θ))^2
+        summary, _, loss = sess.run([self.merged, self.train_operation, self.loss], feed_dict={
+            self._input: states,
+            self._action: actions_one_hot,
+            self._target: targets})
 
-        h_conv2 = tf.nn.relu(self.conv2d(h_conv1, self.W_conv2, strides=[1, 2, 2, 1], padding='VALID'))
-
-        h_conv3 = tf.nn.relu(self.conv2d(h_conv2, self.W_conv3, strides=[1, 1, 1, 1], padding='VALID'))
-
-        shape = h_conv3.get_shape().as_list()
-        h_conv_flat = tf.reshape(h_conv3, [-1, shape[1] * shape[2] * shape[3]])
-
-        # First fully connected layer
-        h_fc1 = tf.nn.relu(tf.matmul(h_conv_flat, self.W_fc1))
-
-        # output layer
-        q_actions = tf.matmul(h_fc1, self.out_layer)
-
-        return q_actions
+        if train_step % self.args.update_tf_board == 0:
+            print "Summary data has been written!!"
+            self.train_writer.add_summary(summary, train_step)
+        return loss
