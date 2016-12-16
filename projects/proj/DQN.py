@@ -2,6 +2,8 @@
 
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+import numpy as np
+
 
 class Network:
     def __init__(self, args, output_size, scope):
@@ -16,7 +18,9 @@ class Network:
             self._target = tf.placeholder(tf.float32, [None], name="input_targets")
             self._action = tf.placeholder(tf.float32, [None, output_size], name="input_actions")
             self._build_graph()
-            self.train_writer = tf.train.SummaryWriter('./summary/' + self.args.mode + "/")
+
+            summary_path = './summary/' + self.args.game_name + "/" + self.args.mode + "/"
+            self.train_writer = tf.train.SummaryWriter(summary_path)
             self.total_reward_ph = tf.placeholder(tf.float32, [], name="total_reward_placeholder")
             self.total_reward_summary = tf.scalar_summary(self.scope + '_total_reward', self.total_reward_ph)
 
@@ -59,6 +63,9 @@ class Network:
             tf.scalar_summary('max_q_value', tf.reduce_max(self.predictions))
         ])
 
+        self.action_ids = tf.placeholder('int32', [None, None], 'outputs_idx')
+        self.predictions_by_id = tf.gather_nd(self.predictions, self.action_ids)
+
     def predict(self, sess, states):
         return sess.run(self.predictions, {self._input: states})
 
@@ -73,3 +80,8 @@ class Network:
             print "Summary data has been written!!"
             self.train_writer.add_summary(summary, train_step)
         return loss
+
+
+    def get_predictions_by_action_ids(self, sess, states, actions_ids):
+        return self.predictions_by_id.eval(
+            {self._input: states, self.action_ids: actions_ids}, session=sess)

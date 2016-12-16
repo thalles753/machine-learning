@@ -27,6 +27,9 @@ netarg.add_argument("--clip_error", type=float, default=1, help="Clip error term
 netarg.add_argument("--min_reward", type=float, default=-1, help="Minimum reward.")
 netarg.add_argument("--max_reward", type=float, default=1, help="Maximum reward.")
 
+antarg = parser.add_argument_group('DQN Features')
+antarg.add_argument("--double_q_learning", type=bool, default=True, help="Whether or not using Double DQN implementation.")
+
 antarg = parser.add_argument_group('Agent')
 antarg.add_argument("--initial_exploration", type=float, default=1.0, help="Exploration rate at the beginning of decay.")
 antarg.add_argument("--final_exploration", type=float, default=0.1, help="Exploration rate at the end of decay.")
@@ -47,20 +50,19 @@ mainarg.add_argument("--update_tf_board", type=int, default=1000, help="Update t
 
 args = parser.parse_args()
 env = gym.make(args.game_name)
-env.monitor.start('./results/' + args.game_name)
+#env.monitor.start('./results/' + args.game_name)
 agent = agent.LearningAgent(env, args)
 
 step = 0
 
 for epoch in range(args.epochs):
 
-    for train_step in range(args.test_steps):
+    for train_step in range(args.train_steps):
 
         done = agent.update(step)
         step += 1
 
-    # if args.mode == "train":
-        # agent.save_model()
+    agent.save_model()
 
     print("Epoch #", epoch, "has finished.")
-env.monitor.close()
+#env.monitor.close()
