@@ -82,7 +82,7 @@ class LearningAgent:
     def restore_model(self):
         model_path = "./models/" + self.args.game_name + "/" + "model.ckpt"
         self.saver.restore(self._session, model_path)
-        print("Model restored.")
+        print("Model restored from:", model_path)
 
     def reset_debug_variables(self):
         self.number_of_random_actions = 0
