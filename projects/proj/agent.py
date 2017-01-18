@@ -202,11 +202,17 @@ class LearningAgent:
         out = misc.imresize(out, (self.args.screen_width, self.args.screen_height), interp="bilinear")
         return out
 
-    # def process_rewards(self, reward):
-    #     if self.lives > self._env.ale.lives():
-    #         self.lives = self._env.ale.lives()
-    #         return -10.0
-    #     return reward
+    def process_lives(self):
+        terminal =  False
+        if self._env.ale.lives() > self.lives:
+            self.lives = self._env.ale.lives()
+
+        # Loosing a life will trigger a terminal signal in training mode.
+        # We assume that a "life" IS an episode during training, but not during testing
+        elif self._env.ale.lives() < self.lives:
+            self.lives = self._env.ale.lives()
+            terminal = True
+        return terminal
 
     def save_model(self):
         if self.args.mode == "train":
@@ -230,8 +236,10 @@ class LearningAgent:
         new_frame, reward, done, info = self._env.step(action)
         self.total_reward += reward
 
-        if self._env.ale.lives() == 0:
-            reward = -10.0
+        if self.args.mode == "train":
+            done = self.process_lives()
+            if done:
+                reward = -10.0
 
         new_observation = np.expand_dims(self.process_input(new_frame), axis=2) # 84 x 84 x 1
         next_state = np.array(self.state[:, :, 1:], copy=True)
