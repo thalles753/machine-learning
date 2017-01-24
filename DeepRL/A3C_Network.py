@@ -7,10 +7,12 @@ from constants import GLOBAL_NETWORK_NAME
 
 # Asynchronous Advantage Actor-Critic (A3C)
 class A3C_Network:
-    def __init__(self, args, output_size, trainer, scope):
+    def __init__(self, args, output_size, trainer, scope, global_step=None, learning_rate=None):
         self.args = args
         self.trainer = trainer
         self.scope_name = scope
+        self.global_episodes = global_step
+        self.learning_rate = learning_rate
         input_shape = (args.screen_width, args.screen_height, args.agent_history_length) # 84 x 84 x 4
         with tf.variable_scope(scope):
             self.output_size = output_size
@@ -27,11 +29,17 @@ class A3C_Network:
                 self._prepare_loss_ops()
 
             summary_path = './summary/' + self.args.game_name + "/" + self.args.mode + "/"
-            self.train_writer = tf.train.SummaryWriter(summary_path)
+            self.train_writer = tf.summary.FileWriter(summary_path)
 
-    def update_epsode_average_reward(self, sess, episode_reward, game_number):
-        summary = tf.Summary(value=episode_reward)
-        self.train_writer.add_summary(summary, game_number)
+            self.episode_average_reward_input = tf.placeholder(tf.float32, [], name="average_score_per_episode_place_holder")
+            self.episode_average_reward_summary = tf.summary.scalar('average_score_per_episode', self.episode_average_reward_input)
+
+    def update_episode_average_reward(self, sess, average_score, game_number):
+        reward_summary = sess.run(self.episode_average_reward_summary,
+                                  feed_dict={self.episode_average_reward_input: average_score})
+        self.train_writer.add_summary(reward_summary, game_number)
+
+
 
     # Build network as described in (Mnih et al., 2013)
     def _build_graph(self):
@@ -59,32 +67,42 @@ class A3C_Network:
     def predict_policy(self, sess, states):
         return sess.run(self.policy_predictions, {self._input: states})[0]
 
+    def predict_policy_and_values(self, sess, states):
+        policy, values = sess.run([self.policy_predictions, self.value_func_prediction], {self._input: states})
+        return policy[0], values[0][0]
+
     def _prepare_loss_ops(self):
         # temporary difference (R-V) (input for policy)
         self.td = tf.placeholder("float", [None], name="r-v_values")
 
+        # policy softmax probabilities
         policy = self.policy_predictions
 
         # R (input for value)
         self.r = tf.placeholder("float", [None], name="R_values")
 
         # avoid NaN with clipping when value in pi becomes zero
-        log_pi = tf.log(policy) #log π(a_i|s_i; θ?)
+        log_pi = tf.log(tf.clip_by_value(policy, 1e-20, 1.0)) #log π(a_i|s_i; θ?)
+
+        # Add print operation
+        # log_pi = tf.Print(log_pi, [log_pi], message="log_pi: ")
 
         # policy entropy
-        entropy = - tf.reduce_sum(policy * log_pi)
+        entropy = - tf.reduce_sum(policy * log_pi, reduction_indices=1)
+
+        # entropy = tf.Print(entropy, [entropy], message="entropy: ")
 
         # policy loss (output)  (Adding minus, because the original paper's objective function is for gradient ascent, but we use gradient descent optimizer.)
-        policy_loss = - tf.reduce_sum(tf.reduce_sum(log_pi * self._action, reduction_indices=1) * self.td)
+        policy_loss = - tf.reduce_sum(tf.reduce_sum(log_pi * self._action, reduction_indices=1) * self.td + entropy * self.args.entropy_regularization)
 
         # value loss function (output)
         # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-        value_loss = 0.5 * tf.reduce_sum(tf.square(self.value_func_prediction - self.r))
+        value_loss = 0.5 * tf.nn.l2_loss(self.r - self.value_func_prediction)
 
         bs = tf.to_float(tf.shape(self._input)[0])
 
         # gradients of policy and value are summed up
-        self.total_loss = 0.5 * value_loss + policy_loss - entropy * self.args.entropy_regularization
+        self.total_loss = value_loss + policy_loss
 
         local_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope_name)
         self.gradients = tf.gradients(self.total_loss, local_vars)
@@ -94,32 +112,33 @@ class A3C_Network:
         grads, _ = tf.clip_by_global_norm(self.gradients, 40.0)
 
         # apply the gradients
-        self.apply_gradients = self.trainer.apply_gradients(zip(grads, global_vars))
+        self.apply_gradients = self.trainer.apply_gradients(zip(grads, global_vars), global_step=self.global_episodes)
 
-        self.merged = tf.merge_summary([
-            tf.scalar_summary('loss', self.total_loss / bs),
-            tf.scalar_summary("value_loss", value_loss / bs),
-            tf.scalar_summary('policy_loss', policy_loss / bs)
+        self.merged = tf.summary.merge([
+            tf.summary.scalar('loss', self.total_loss / bs),
+            tf.summary.scalar("value_loss", value_loss / bs),
+            tf.summary.scalar('policy_loss', policy_loss / bs),
+            tf.summary.scalar('learning_rate', self.learning_rate)
         ])
 
-    def get_variables(self):
-        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope_name)
-
     def update_gradients(self, sess, batch_states, batch_actions_one_hot, batch_td, batch_R, train_step, thread_id):
-        summaries, grads = sess.run([self.merged, self.apply_gradients],
+        summaries, grads, counter, lr = sess.run([self.merged, self.apply_gradients, self.global_episodes, self.learning_rate],
         feed_dict = {
             self._input: batch_states,
             self._action: batch_actions_one_hot,
             self.td: batch_td,
             self.r: batch_R,
         })
-
+        # print "Thread id: ", thread_id, " Learning rate: ", lr
         if train_step % self.args.update_tf_board == 0 and thread_id == 0:
             self.train_writer.add_summary(summaries, train_step)
+            # print "Global episode counter:", counter
+
+        return counter
 
     def _prepare_sync_ops(self):
         global_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, GLOBAL_NETWORK_NAME)
-        local_vars = self.get_variables()
+        local_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope_name)
 
         sync_ops = []
 

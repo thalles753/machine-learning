@@ -10,24 +10,25 @@ from Utils import display_transition
 
 class Worker:
     # each worker has its own network and its own environment
-    def __init__(self, args, thread_id, model_path, global_episodes, global_network, trainer, lock):
+    def __init__(self, args, thread_id, model_path, global_counter, global_network, trainer, lock, learning_rate):
         print "Creating worker: ", thread_id
         self.args = args
         self.thread_id = thread_id
         self.trainer = trainer
         self.model_path = model_path
-        self.global_episodes = global_episodes
-        self.increment = self.global_episodes.assign_add(1)
+        self.global_counter = global_counter
         self.global_network = global_network
         self.scope = "worker_" + str(thread_id)
         self.state = None
         self.lives = None
         self.lock = lock
+        self.local_step_counter = 0
+        self.global_step_counter = 0
+
+        # Add ops to save and restore all the variables.
+        self.saver = tf.train.Saver()
 
         # with self.lock:
-        # creates own worker agent environment
-        self._env = gym.make(self.args.game_name)
-
         # creates own worker agent environment
         self._env = gym.make(self.args.game_name)
 
@@ -39,7 +40,7 @@ class Worker:
         self.game_initial_setup()
 
         # creates own worker agent network
-        self.network = A3C_Network(args=args, output_size=self.n_actions, trainer=trainer, scope=self.scope)
+        self.network = A3C_Network(args=args, output_size=self.n_actions, trainer=trainer, scope=self.scope, global_step=self.global_counter, learning_rate=learning_rate)
 
     # for the first step, the state is the same frame screen repeated [agent_history_length] times
     def game_initial_setup(self):
@@ -75,16 +76,14 @@ class Worker:
     def work(self, sess, coordinator):
         print "Thread:", self.thread_id, "has started."
 
-        episode_count = sess.run(self.global_episodes)
-
         episode_number = 0
         total_reward = 0
-        total_reward_list = []
         t = 0
+        average_episode_reward = []
 
-        for train_step in range(25000000):
+        while True:
             # print "Time step:", t
-            t_start = t;
+            t_start = t
 
             # print "--", self.network.scope_name, "-- Are nets equal:", self.compare_global_and_local_networks(sess)
             # reset the worker's local network weights to be the same of the global network
@@ -96,12 +95,15 @@ class Worker:
             while True:
 
                 # Perform action at according to policy π(a_t|s_t; θ')
-                action = self.network.predict_policy(sess, np.expand_dims(self.state, axis=0))
-                action_index = self.choose_action_randomly(action)
+                policy, value = self.network.predict_policy_and_values(sess, np.expand_dims(self.state, axis=0))
+                action_index = self.choose_action_randomly(policy)
 
                 # with self.lock:
                 # self._env.render()
                 observation, reward, is_terminal, info = self._env.step(action_index)
+
+                with self.lock:
+                    self.global_step_counter += 1
 
                 total_reward += reward
 
@@ -120,7 +122,7 @@ class Worker:
                 clipped_reward = np.clip(reward, self.args.min_reward, self.args.max_reward)
 
                 # store experiences
-                ex = [self.state, action_index, clipped_reward, next_state, is_terminal]
+                ex = [self.state, action_index, clipped_reward, value, is_terminal]
                 # display_transition(self._env.get_action_meanings(), ex)
 
                 experiences.append(ex)
@@ -139,41 +141,48 @@ class Worker:
             if not is_terminal:
                 R = self.network.predict_values(sess, np.expand_dims(self.state, axis=0))
 
-            self.compute_and_accumulate_rewards(R, experiences, sess, train_step)
+            self.compute_and_accumulate_rewards(R, experiences, sess)
 
             if is_terminal:
 
-                if self.thread_id == 0:
-                    total_reward_list.append(tf.Summary.Value(tag="episode_average_reward", simple_value=total_reward))
-
-                if self.thread_id == 0:
-                    self.network.update_epsode_average_reward(sess, total_reward_list, episode_number)
-                    print "Summary data has been written."
-                    total_reward_list = []
-
+                average_episode_reward.append(total_reward)
                 total_reward = 0
                 episode_number += 1
 
+                if episode_number % self.args.average_episode_reward_stats_per_game == 0:
+                    if self.thread_id == 0:
+                        # print "total_episode_reward", average_episode_reward
+                        # print "average episode reward:", np.mean(average_episode_reward)
+
+                        self.network.update_episode_average_reward(sess, np.mean(average_episode_reward), episode_number)
+                        print "Summary data has been written."
+
+                    average_episode_reward = []
+
                 if self.thread_id == 0:
-                    print "Epsode #", episode_number, "has finished."
+                    print "Episode #", episode_number, "has finished. Global step:", self.global_step_counter
 
                 # reset environment
                 self.reset_game_env()
 
-        if self.thread_id == 0 and self.args.mode == "train":
-            self.save_model()
+            if self.global_step_counter >= self.args.T_max:
+                break
 
-    def compute_and_accumulate_rewards(self, R, experiences, sess, train_step):
+        if self.thread_id == 0 and self.args.mode == "train":
+            self.network.sync_local_net(sess)
+            self.save_model(sess)
+
+    def compute_and_accumulate_rewards(self, R, experiences, sess):
         previous_states = [d[0] for d in experiences]
         actions = [d[1] for d in experiences]
         rewards = [d[2] for d in experiences]
-        next_states = [d[3] for d in experiences]
+        values = [d[3] for d in experiences]
         terminals = [d[4] for d in experiences]
 
         previous_states.reverse()
         actions.reverse()
         rewards.reverse()
-        next_states.reverse()
+        values.reverse()
         terminals.reverse()
 
         batch_states = []
@@ -182,9 +191,9 @@ class Worker:
         batch_R = []
 
         # compute and accmulate gradients
-        for(state, action, reward) in zip(previous_states, actions, rewards):
+        for(state, action, reward, value) in zip(previous_states, actions, rewards, values):
             R = reward + self.args.discount_factor * R
-            td = R - self.network.predict_values(sess, np.expand_dims(state, axis=0)) # (R - V(si; θ'v)
+            td = R - value # (R - V(si; θ'v)
             a = np.zeros([self.n_actions])
             a[action] = 1
 
@@ -193,23 +202,24 @@ class Worker:
             batch_td.append(td)
             batch_R.append(R)
 
-        self.network.update_gradients(sess, batch_states, batch_actions_one_hot, batch_td, batch_R, train_step, self.thread_id)
+        _ = self.network.update_gradients(sess, batch_states, batch_actions_one_hot, batch_td, batch_R, self.local_step_counter, self.thread_id)
+        self.local_step_counter += 1
 
     def compare_global_and_local_networks(self, sess):
         current_state = np.expand_dims(self.state, axis=0)
 
-        global_net_policy = self.global_network.predict_policy(sess, current_state)
-        local_nets_policy = self.network.predict_policy(sess, current_state)
+        global_net_policy, global_net_values = self.global_network.predict_policy_and_values(sess, current_state)
+        local_nets_policy, local_nets_values = self.network.predict_policy_and_values(sess, current_state)
 
-        if np.array_equal(global_net_policy, local_nets_policy):
+        if np.array_equal(global_net_policy, local_nets_policy) and np.array_equal(global_net_values, local_nets_values):
             return True
         else:
             return False
 
-    def save_model(self):
-        model_path = "./models/" + self.args.game_name
+    def save_model(self, sess):
+        model_path = "./model/" + self.args.game_name
         if not os.path.exists(model_path):
             os.makedirs(model_path)
             print "Model folder created."
-        save_path = self.saver.save(self._session, model_path + "/" + "model.ckpt")
+        save_path = self.saver.save(sess, model_path + "/" + "model.ckpt")
         print("Model saved in file: %s" % save_path)

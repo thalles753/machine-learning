@@ -12,6 +12,7 @@ from constants import GLOBAL_NETWORK_NAME
 from threading import Lock
 import numpy as np
 import random
+from constants import TOTAL_TRAINING_STEPS
 
 parser = argparse.ArgumentParser()
 
@@ -25,7 +26,8 @@ envarg.add_argument("--screen_height", type=int, default=84, help="Screen height
 envarg.add_argument("--agent_history_length", type=int, default=4, help="The number of most recent frames experienced by the agent that are given as input to the Q network.")
 
 netarg = parser.add_argument_group('A3C network')
-netarg.add_argument("--epsilon", type=float, default=1e-1, help="Epsilon value for RmsProp optimizer.")
+netarg.add_argument("--learning_rate", type=float, default=7e-4, help="Initial learning rate.")
+netarg.add_argument("--epsilon", type=float, default=0.1, help="Epsilon value for RmsProp optimizer.")
 netarg.add_argument("--discount_factor", type=float, default=0.99, help="Discount factor gamma used in the Q Learning updates.")
 netarg.add_argument('--optimizer', choices=['rmsprop', 'adam'], default='rmsprop', help='Network optimization algorithm.')
 netarg.add_argument("--decay_rate", type=float, default=0.99, help="Decay rate for RMSProp and Adadelta algorithms.")
@@ -40,11 +42,15 @@ antarg.add_argument("--tmax", type=int, default=5, help="Perform training after 
 mainarg = parser.add_argument_group('Main loop')
 mainarg.add_argument("--epoch_size", type=int, default=4000000, help="How many training steps per epoch.")
 mainarg.add_argument("--total_epochs", type=int, default=50, help="How many epochs to run.")
-mainarg.add_argument("--test_steps", type=int, default=125000, help="How many testing steps after each epoch.")
+
+# They ran it 320 million frames (= 80 million non-skipped frames) for one-day results,
+# 1 billion frames for four-day results - Assuming 4 frame skip
+mainarg.add_argument("--T_max", type=int, default=100000000, help="Total number of steps to train (measured in processed frames)")
 
 mainarg = parser.add_argument_group('Debugging variables')
-mainarg.add_argument("--average_reward_stats_per_game", type=int, default=1, help="Show learning statistics after this number of epoch.")
+mainarg.add_argument("--average_episode_reward_stats_per_game", type=int, default=5, help="Show learning statistics after this number of epoch.")
 mainarg.add_argument("--update_tf_board", type=int, default=10, help="Update the Tensorboard every X steps.")
+
 
 def sample_learning_rate():
     return np.exp(random.uniform(np.log(10**-4), np.log(10**-2)))
@@ -62,34 +68,44 @@ env = gym.make(args.game_name)
 
 n_actions = env.action_space.n
 
+config = tf.ConfigProto(
+        device_count={'GPU': 0}
+    )
+
 with tf.device("/cpu:0"):
-    global_episodes = tf.Variable(0,dtype=tf.int32,name='global_episodes',trainable=False)
-    # create global network
+    global_episodes = tf.Variable(0, dtype=tf.int32, name='global_episodes_counter', trainable=False)
 
-    main_lock = None
+    main_lock = Lock()
 
+    # linearly (power 1) annel the learning rate to 0 over the course of training
+    learning_rate = tf.train.polynomial_decay(args.learning_rate, global_episodes, TOTAL_TRAINING_STEPS,
+                                              end_learning_rate=0.0, power=1.0, cycle=False, name=None)
+
+    print "Optimizer algorithm:", args.optimizer
+    print "Learning rate:", args.learning_rate
     if args.optimizer == 'rmsprop':
-        print "Optimizer algorithm:", args.optimizer
-        lr = sample_learning_rate()
-        print "Learning rate:", lr
-        trainer = tf.train.RMSPropOptimizer(learning_rate=lr, decay=args.decay_rate, momentum=0.0, epsilon=args.epsilon)
+        trainer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=args.decay_rate,
+                                            momentum=0.0, epsilon=args.epsilon)
     elif args.optimizer == 'adam':
-        print "Optimizer algorithm:", args.optimizer
-        trainer = tf.train.AdamOptimizer(1e-4)
+        trainer = tf.train.AdamOptimizer(1e-5)
 
+    # create global network
     global_network = A3C_Network(args, n_actions, trainer=trainer, scope=GLOBAL_NETWORK_NAME) # Generate global network
 
     # get the number of available threads
     num_workers = multiprocessing.cpu_count() # Set workers ot number of available CPU threads
+    print "# of Threads: ", num_workers
+
     workers = []
     # Create worker classes
     for thread_id in range(num_workers):
-        workers.append(Worker(args, thread_id, model_path, global_episodes, global_network, trainer, main_lock))
+        workers.append(Worker(args, thread_id, model_path, global_episodes,
+                              global_network, trainer, main_lock, learning_rate))
 
-with tf.Session() as sess:
+with tf.Session(config=config) as sess:
 
     coord = tf.train.Coordinator()
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
 
     # This is where the asynchronous magic happens.
     # Start the "work" process for each worker in a separate threat.
