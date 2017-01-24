@@ -20,7 +20,7 @@ class LearningAgent:
         print "--------------------------------"
         # game variables and constants
         self.args = args
-        self._env = env
+        self._env = env # open ai environment
         _ = self._env.reset()
         self.lives = self._env.ale.lives()
         self.ACTION_NAMES = self._env.get_action_meanings()
@@ -29,9 +29,11 @@ class LearningAgent:
         self.train_step = 0
         self.PIXEL_DEPTH = 255.0
         self.game_number = 0
-        self.total_reward = 0
+        self.total_episode_reward = 0
 
-        self.reset_debug_variables()
+        self.number_of_random_actions = 0
+        self.number_of_systematic_actions = 0
+
         self.actions_distribution = dict([(key, 0) for key in self.ACTION_NAMES])
 
         # start experience replay dataset
@@ -64,6 +66,9 @@ class LearningAgent:
         if self.args.mode == "test":
             self.restore_model()
 
+    # Compare the train and target network outcome
+    # This routine function only checks if the two networks have the same set of weights by comparing
+    # their action values to ensure equality; Useful before and/or after a call to Utils.copy_model_parameters()
     def compare_train_target_net_random_weight(self):
         current_state = np.expand_dims(self.state, axis=0)
         target_logits = self.target_network.predict(self._session, self.normalize_input(current_state))
@@ -75,15 +80,17 @@ class LearningAgent:
         else:
             return False
 
-    # normalize network input between 0 and 1
+    # normalize network input to be between 0 and 1
     def normalize_input(self, input):
         return np.divide(input, self.PIXEL_DEPTH)
 
+    # restore previously saved model parameters to the current tensorflow session
     def restore_model(self):
         model_path = "./models/" + self.args.game_name + "/" + "model.ckpt"
         self.saver.restore(self._session, model_path)
         print("Model restored from:", model_path)
 
+    #
     def reset_debug_variables(self):
         self.number_of_random_actions = 0
         self.number_of_systematic_actions = 0
@@ -108,6 +115,8 @@ class LearningAgent:
         # clip rewards between -1 and 1
         rewards = np.clip(rewards, a_min=self.args.min_reward, a_max=self.args.max_reward)
 
+        # Every [target_network_update_frequency] steps, update the target network weights to be the same
+        # ones from the action-value network (train_network)
         if self.train_step % self.args.target_network_update_frequency == 0:
             print "(Before) Are networks equal:", self.compare_train_target_net_random_weight()
             # update target network
@@ -154,6 +163,7 @@ class LearningAgent:
         self.train_step += 1
         return loss
 
+    # reset openai game environment
     def reset_env(self):
         _ = self._env.reset()
         self.lives = self._env.ale.lives()
@@ -161,7 +171,9 @@ class LearningAgent:
     def get_action_name(self, action):
         return self.ACTION_NAMES[action]
 
+    # Create the initial game state
     # for the first step, the state is the same frame screen repeated [agent_history_length] times
+    # A game state is a stack of the last 4 observation frames
     def game_initial_setup(self):
         frame, _, _, _ = self._env.step(0)
         processed_frame = self.process_input(frame)
@@ -194,7 +206,7 @@ class LearningAgent:
                 max(0, (self.args.initial_exploration - self.args.final_exploration) *
                     (self.args.final_exploration_frame - max(0, global_step - self.args.replay_start_size)) / self.args.final_exploration_frame))
 
-    # returns a 84 x 84 image tensor as described in the deep minds paper
+    # returns a black/white 84 x 84 x 1 numpy array
     def process_input(self, img):
         out = img[:195, :] # get only the playing area of the image
         r, g, b = out[:,:,0], out[:,:,1], out[:,:,2]
@@ -202,8 +214,9 @@ class LearningAgent:
         out = misc.imresize(out, (self.args.screen_width, self.args.screen_height), interp="bilinear")
         return out
 
+    # Process the agent's current lives
     def process_lives(self):
-        terminal =  False
+        terminal = False
         if self._env.ale.lives() > self.lives:
             self.lives = self._env.ale.lives()
 
@@ -214,6 +227,7 @@ class LearningAgent:
             terminal = True
         return terminal
 
+    # Save the model's parameters
     def save_model(self):
         if self.args.mode == "train":
             model_path = "./models/" + self.args.game_name
@@ -234,13 +248,16 @@ class LearningAgent:
 
         # Execute action a_t in emulator and observe reward r_t and image x_t+1
         new_frame, reward, done, info = self._env.step(action)
-        self.total_reward += reward
+        self.total_episode_reward += reward
 
         if self.args.mode == "train":
             done = self.process_lives()
-            if done:
-                reward = -10.0
 
+        if done:
+            reward = -10.0
+
+        # generate the next state by appending the new observation frame to the end of the
+        # last state
         new_observation = np.expand_dims(self.process_input(new_frame), axis=2) # 84 x 84 x 1
         next_state = np.array(self.state[:, :, 1:], copy=True)
         next_state = np.append(next_state, new_observation, axis=2)
@@ -277,9 +294,9 @@ class LearningAgent:
             self.game_number += 1
 
             if self.game_number % self.args.average_reward_stats_per_game == 0:
-                average_reward = self.total_reward / self.args.average_reward_stats_per_game
+                average_reward = self.total_episode_reward / self.args.average_reward_stats_per_game
                 self.train_network.update_average_reward(self._session, average_reward, self.game_number)
-                self.total_reward = 0
+                self.total_episode_reward = 0
 
                 print self.actions_distribution
                 self.actions_distribution = dict([(key, 0) for key in self.ACTION_NAMES])

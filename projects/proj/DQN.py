@@ -53,7 +53,7 @@ class Network:
         diff_clipped = tf.clip_by_value(diff, -self.args.clip_error, self.args.clip_error)
         self.loss = tf.reduce_mean(tf.square(diff_clipped))
 
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=0.00025, decay=0.95, epsilon=0.001)
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=0.00025, decay=0.99, epsilon=0.01)
         # optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=0.1)
         self.train_operation = optimizer.minimize(self.loss, global_step=tf.contrib.framework.get_global_step())
 
@@ -80,7 +80,6 @@ class Network:
             print "Summary data has been written!!"
             self.train_writer.add_summary(summary, train_step)
         return loss
-
 
     def get_predictions_by_action_ids(self, sess, states, actions_ids):
         return self.predictions_by_id.eval(

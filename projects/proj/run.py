@@ -2,13 +2,14 @@ import agent
 import gym
 import argparse
 from gym import wrappers
+import tensorflow as tf
 
 parser = argparse.ArgumentParser()
 
 envarg = parser.add_argument_group('Environment')
 envarg.add_argument("--game_name", default="DemonAttack-v0", help="Atari game name to be used.")
 envarg.add_argument('--mode', choices=['train', 'test'], default='train', help='Mode to run the agent.')
-envarg.add_argument('--render', type=bool, default=True, help='Should show the game images.')
+envarg.add_argument('--render', type=bool, default=False, help='Should show the game images.')
 envarg.add_argument("--frame_skip", type=int, default=4, help="How many times to repeat each chosen action.")
 envarg.add_argument("--screen_width", type=int, default=84, help="Screen width after resize.")
 envarg.add_argument("--screen_height", type=int, default=84, help="Screen height after resize.")
@@ -45,7 +46,7 @@ mainarg.add_argument("--epochs", type=int, default=200, help="How many epochs to
 mainarg.add_argument("--test_steps", type=int, default=125000, help="How many testing steps after each epoch.")
 
 mainarg = parser.add_argument_group('Debugging variables')
-mainarg.add_argument("--average_reward_stats_per_game", type=int, default=10, help="Show learning statistics after this number of epoch.")
+mainarg.add_argument("--average_reward_stats_per_game", type=int, default=1, help="Show learning statistics after this number of epoch.")
 mainarg.add_argument("--update_tf_board", type=int, default=1000, help="Update the Tensorboard every X steps.")
 
 
@@ -59,20 +60,20 @@ if args.mode == "test":
 agent = agent.LearningAgent(env, args)
 
 step = 0
+with tf.device("/gpu:0"):
+    for epoch in range(args.epochs):
 
-for epoch in range(args.epochs):
+        for train_step in range(args.train_steps):
 
-    for train_step in range(args.train_steps):
+            done = agent.update(step)
+            step += 1
 
-        done = agent.update(step)
-        step += 1
+        agent.save_model()
 
-    # agent.save_model()
+        print("Epoch #", epoch, "has finished.")
 
-    print("Epoch #", epoch, "has finished.")
-
-if args.mode == "test":
-    env.monitor.close()
-    gym.upload('./results/' + args.game_name, api_key='sk_ppjQw9T1TYgT1LKJfSG9Q')
+    if args.mode == "test":
+        env.monitor.close()
+        gym.upload('./results/' + args.game_name, api_key='sk_ppjQw9T1TYgT1LKJfSG9Q')
 
 
