@@ -56,6 +56,7 @@ class A3C_Network:
 
         fc1 = slim.fully_connected(flattened, 256, activation_fn=tf.nn.relu, biases_initializer=None)
 
+        # estimate of the value function
         self.value_func_prediction = slim.fully_connected(fc1, 1, activation_fn=None, biases_initializer=None)
 
         # softmax output with one entry per action representing the probability of taking an action
@@ -121,8 +122,8 @@ class A3C_Network:
             tf.summary.scalar('learning_rate', self.learning_rate)
         ])
 
-    def update_gradients(self, sess, batch_states, batch_actions_one_hot, batch_td, batch_R, train_step, thread_id):
-        summaries, grads, counter, lr = sess.run([self.merged, self.apply_gradients, self.global_episodes, self.learning_rate],
+    def update_gradients(self, sess, batch_states, batch_actions_one_hot, batch_td, batch_R, thread_id):
+        summaries, grads, train_step, lr = sess.run([self.merged, self.apply_gradients, self.global_episodes, self.learning_rate],
         feed_dict = {
             self._input: batch_states,
             self._action: batch_actions_one_hot,
@@ -134,7 +135,7 @@ class A3C_Network:
             self.train_writer.add_summary(summaries, train_step)
             # print "Global episode counter:", counter
 
-        return counter
+        return train_step
 
     def _prepare_sync_ops(self):
         global_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, GLOBAL_NETWORK_NAME)

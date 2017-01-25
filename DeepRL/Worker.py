@@ -22,8 +22,8 @@ class Worker:
         self.state = None
         self.lives = None
         self.lock = lock
-        self.local_step_counter = 0
-        self.global_step_counter = 0
+        self.local_train_counter = 0
+        self.total_steps_per_thread = self.args.T_max / 8
 
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
@@ -51,6 +51,7 @@ class Worker:
         self._env.frameskip = self.args.frame_skip
         print "Game setup and ready to go!"
 
+    # Select a random action based on the current policy function probabilities
     def choose_action_randomly(self, action_distributions):
         a = np.random.choice(action_distributions, p=action_distributions)
         action_id = np.argmax(action_distributions == a)
@@ -74,10 +75,10 @@ class Worker:
         return terminal
 
     def work(self, sess, coordinator):
-        print "Thread:", self.thread_id, "has started."
+        print "Thread:", self.thread_id, "has started. It will run", self.total_steps_per_thread, "frames"
 
         episode_number = 0
-        total_reward = 0
+        total_episode_reward = 0
         t = 0
         average_episode_reward = []
 
@@ -85,16 +86,14 @@ class Worker:
             # print "Time step:", t
             t_start = t
 
-            # print "--", self.network.scope_name, "-- Are nets equal:", self.compare_global_and_local_networks(sess)
             # reset the worker's local network weights to be the same of the global network
             self.network.sync_local_net(sess)
-            # print "--", self.network.scope_name, "-- Are nets equal:", self.compare_global_and_local_networks(sess)
 
             experiences = []
 
             while True:
 
-                # Perform action at according to policy π(a_t|s_t; θ')
+                # Perform action a_t according to policy π(a_t|s_t; θ')
                 policy, value = self.network.predict_policy_and_values(sess, np.expand_dims(self.state, axis=0))
                 action_index = self.choose_action_randomly(policy)
 
@@ -102,10 +101,8 @@ class Worker:
                 # self._env.render()
                 observation, reward, is_terminal, info = self._env.step(action_index)
 
-                with self.lock:
-                    self.global_step_counter += 1
-
-                total_reward += reward
+                # accumulate immediate reward
+                total_episode_reward += reward
 
                 if self.args.mode == "train":
                     is_terminal = self.process_lives()
@@ -132,9 +129,8 @@ class Worker:
 
                 self.state = next_state
 
-                # TODO: update global counter
-
-                if t - t_start == self.args.tmax or is_terminal:
+                # The Policy and Value functions are updated after every t_max actions or when a terminal state is reached
+                if t - t_start == self.args.t_max or is_terminal:
                     break
 
             R = 0.0
@@ -145,8 +141,8 @@ class Worker:
 
             if is_terminal:
 
-                average_episode_reward.append(total_reward)
-                total_reward = 0
+                average_episode_reward.append(total_episode_reward)
+                total_episode_reward = 0
                 episode_number += 1
 
                 if episode_number % self.args.average_episode_reward_stats_per_game == 0:
@@ -160,17 +156,19 @@ class Worker:
                     average_episode_reward = []
 
                 if self.thread_id == 0:
-                    print "Episode #", episode_number, "has finished. Global step:", self.global_step_counter
+                    print "Episode #", episode_number, "has finished. Local step:", t
 
                 # reset environment
                 self.reset_game_env()
 
-            if self.global_step_counter >= self.args.T_max:
+            if t >= self.total_steps_per_thread:
                 break
 
         if self.thread_id == 0 and self.args.mode == "train":
             self.network.sync_local_net(sess)
             self.save_model(sess)
+
+        print "Thread:", self.thread_id, "has finished."
 
     def compute_and_accumulate_rewards(self, R, experiences, sess):
         previous_states = [d[0] for d in experiences]
@@ -190,7 +188,7 @@ class Worker:
         batch_td = []
         batch_R = []
 
-        # compute and accmulate gradients
+        # compute and accumulate gradients
         for(state, action, reward, value) in zip(previous_states, actions, rewards, values):
             R = reward + self.args.discount_factor * R
             td = R - value # (R - V(si; θ'v)
@@ -202,8 +200,8 @@ class Worker:
             batch_td.append(td)
             batch_R.append(R)
 
-        _ = self.network.update_gradients(sess, batch_states, batch_actions_one_hot, batch_td, batch_R, self.local_step_counter, self.thread_id)
-        self.local_step_counter += 1
+        self.local_train_counter = self.network.update_gradients(sess, batch_states, batch_actions_one_hot, batch_td, batch_R, self.thread_id)
+
 
     def compare_global_and_local_networks(self, sess):
         current_state = np.expand_dims(self.state, axis=0)
