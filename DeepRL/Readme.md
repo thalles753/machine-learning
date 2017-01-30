@@ -4,6 +4,7 @@
 - Python 2.x
 - TensorFlow r0.12
 - Numpy
+- Openai gym
 
 ## How to run the training algorithm
 To run the algorithm using the default parameters
