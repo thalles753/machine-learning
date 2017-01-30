@@ -33,6 +33,12 @@ Next we see the learning rate decay, policy loss, value loss, and loss (policy +
 
 ## Evaluation
 
+To run the algorithm using the default parameters
+
+```
+$ python test_agent.py
+```
+
 The following shows the average score per game during testing. The y-axis represents the total score the agent accomplished while the x-axis the number of games.
 
 ![Average score per episode](./results/average_score_per_game_testing.png)
