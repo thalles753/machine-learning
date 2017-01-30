@@ -1,4 +1,4 @@
-# Asynchronous Actor Critic (A3C) Thensorflow implementation
+# Asynchronous Actor Critic (A3C) Tensorflow implementation
 
 ## Dependencies
 - Python 2.x
