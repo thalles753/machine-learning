@@ -30,13 +30,10 @@ netarg.add_argument("--epsilon", type=float, default=0.1, help="Epsilon value fo
 netarg.add_argument("--discount_factor", type=float, default=0.99, help="Discount factor gamma used in the Q Learning updates.")
 netarg.add_argument('--optimizer', choices=['rmsprop', 'adam'], default='rmsprop', help='Network optimization algorithm.')
 netarg.add_argument("--decay_rate", type=float, default=0.99, help="Decay rate for RMSProp and Adadelta algorithms.")
-netarg.add_argument("--clip_error", type=float, default=1, help="Clip error term in update between this number and its negative.")
 netarg.add_argument("--min_reward", type=float, default=-1.0, help="Minimum reward.")
 netarg.add_argument("--max_reward", type=float, default=1.0, help="Maximum reward.")
 netarg.add_argument("--entropy_regularization", type=float, default=0.01, help="Maximum reward.")
-
-antarg = parser.add_argument_group('Agent')
-antarg.add_argument("--t_max", type=int, default=5, help="Perform training after this many game steps.")
+netarg.add_argument("--t_max", type=int, default=5, help="Perform training after this many game steps.")
 
 mainarg = parser.add_argument_group('Main loop')
 mainarg.add_argument("--epoch_size", type=int, default=4000000, help="How many training steps per epoch.")
@@ -70,7 +67,7 @@ env = gym.make(args.game_name)
 n_actions = env.action_space.n
 
 config = tf.ConfigProto(
-        device_count={'GPU': 0}
+        device_count={'CPU': 0}
     )
 
 with tf.device("/cpu:0"):

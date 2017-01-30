@@ -8,6 +8,7 @@ import os
 import tensorflow as tf
 from Utils import display_transition
 
+
 class Worker:
     # each worker has its own network and its own environment
     def __init__(self, args, thread_id, model_path, global_counter, global_network, trainer, lock, learning_rate):
@@ -40,7 +41,8 @@ class Worker:
         self.game_initial_setup()
 
         # creates own worker agent network
-        self.network = A3C_Network(args=args, output_size=self.n_actions, trainer=trainer, scope=self.scope, global_step=self.global_counter, learning_rate=learning_rate)
+        if self.args.mode == "train":
+            self.network = A3C_Network(args=args, output_size=self.n_actions, trainer=trainer, scope=self.scope, global_step=self.global_counter, learning_rate=learning_rate)
 
     # for the first step, the state is the same frame screen repeated [agent_history_length] times
     def game_initial_setup(self):
@@ -74,8 +76,48 @@ class Worker:
             terminal = True
         return terminal
 
+    def load_model(self, sess):
+        # Restore variables from disk.
+        self.saver.restore(sess, self.model_path + "/model.ckpt")
+        print("Model restored.")
+
+    def evaluate(self, sess):
+        print "Initializing agent's evaluation."
+        self.load_model(sess)
+        total_episode_reward = 0
+        episode_number = 0
+
+        for i_episode in range(self.args.T_max):
+
+            # self._env.render()
+
+            # Perform action a_t according to policy π(a_t|s_t; θ')
+            policy = self.global_network.predict_policy(sess, np.expand_dims(self.state, axis=0))
+            action = np.argmax(policy)
+
+            observation, reward, done, info = self._env.step(action)
+            total_episode_reward += reward
+
+            # create new state using
+            new_observation = np.expand_dims(process_input(observation), axis=2)  # 84 x 84 x 1
+            next_state = np.array(self.state[:, :, 1:], copy=True)
+            next_state = np.append(next_state, new_observation, axis=2)
+
+            self.state = next_state
+
+            if done:
+                self.global_network.update_episode_average_reward(sess, total_episode_reward, episode_number)
+                print "Summary data has been written."
+                total_episode_reward = 0
+                episode_number += 1
+                print("Episode finished after {} timesteps".format(i_episode + 1))
+                self._env.reset()
+
+
     def work(self, sess, coordinator):
-        print "Thread:", self.thread_id, "has started. It will run", self.total_steps_per_thread, "frames"
+
+        with self.lock:
+            print "Thread:", self.thread_id, "has started. It will run:", self.total_steps_per_thread, "frames"
 
         episode_number = 0
         total_episode_reward = 0
@@ -201,7 +243,6 @@ class Worker:
             batch_R.append(R)
 
         self.local_train_counter = self.network.update_gradients(sess, batch_states, batch_actions_one_hot, batch_td, batch_R, self.thread_id)
-
 
     def compare_global_and_local_networks(self, sess):
         current_state = np.expand_dims(self.state, axis=0)
