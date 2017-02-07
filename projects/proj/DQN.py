@@ -50,8 +50,8 @@ class Network:
         readout_action = tf.reduce_sum(tf.mul(self.predictions, self._action), reduction_indices=1)
 
         diff = self._target - readout_action
-        diff_clipped = tf.clip_by_value(diff, -self.args.clip_error, self.args.clip_error)
-        self.loss = tf.reduce_mean(tf.square(diff_clipped))
+
+        self.loss = tf.reduce_mean(self.clipped_error(diff))
 
         optimizer = tf.train.RMSPropOptimizer(learning_rate=0.00025, decay=0.99, epsilon=0.01)
         # optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate, epsilon=0.1)
@@ -65,6 +65,10 @@ class Network:
 
         self.action_ids = tf.placeholder('int32', [None, None], 'outputs_idx')
         self.predictions_by_id = tf.gather_nd(self.predictions, self.action_ids)
+
+    def clipped_error(self, x):
+       # Huber loss
+       return tf.select(tf.abs(x) < 1.0, 0.5 * tf.square(x), tf.abs(x) - 0.5)
 
     def predict(self, sess, states):
         return sess.run(self.predictions, {self._input: states})
