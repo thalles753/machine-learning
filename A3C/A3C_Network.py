@@ -11,7 +11,7 @@ class A3C_Network:
         self.args = args
         self.trainer = trainer
         self.scope_name = scope
-        self.global_episodes = global_step
+        self.global_train_step = global_step
         self.learning_rate = learning_rate
         input_shape = (args.screen_width, args.screen_height, args.agent_history_length) # 84 x 84 x 4
         with tf.variable_scope(scope):
@@ -46,21 +46,30 @@ class A3C_Network:
 
         normalized_input = tf.div(self._input, 255.0)
 
+        d = tf.divide(1.0, tf.sqrt(8. * 8. * 4.))
         conv1 = slim.conv2d(normalized_input, 16, [8, 8], activation_fn=tf.nn.relu,
-                            padding='VALID', stride=4, biases_initializer=None)
+                            padding='VALID', stride=4, biases_initializer=None,
+                            weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
+        d = tf.divide(1.0, tf.sqrt(4. * 4. * 16.))
         conv2 = slim.conv2d(conv1, 32, [4, 4], activation_fn=tf.nn.relu,
-                            padding='VALID', stride=2, biases_initializer=None)
+                            padding='VALID', stride=2, biases_initializer=None,
+                            weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
         flattened = slim.flatten(conv2)
 
-        fc1 = slim.fully_connected(flattened, 256, activation_fn=tf.nn.relu, biases_initializer=None)
+        d = tf.divide(1.0, tf.sqrt(2592.))
+        fc1 = slim.fully_connected(flattened, 256, activation_fn=tf.nn.relu, biases_initializer=None,
+                                   weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
+        d = tf.divide(1.0, tf.sqrt(256.))
         # estimate of the value function
-        self.value_func_prediction = slim.fully_connected(fc1, 1, activation_fn=None, biases_initializer=None)
+        self.value_func_prediction = slim.fully_connected(fc1, 1, activation_fn=None, biases_initializer=None,
+                                                          weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
         # softmax output with one entry per action representing the probability of taking an action
-        self.policy_predictions = slim.fully_connected(fc1, self.output_size, activation_fn=tf.nn.softmax, biases_initializer=None)
+        self.policy_predictions = slim.fully_connected(fc1, self.output_size, activation_fn=tf.nn.softmax,
+                                                       biases_initializer=None, weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
     def predict_values(self, sess, states):
         return sess.run(self.value_func_prediction, {self._input: states})[0][0]
@@ -113,7 +122,7 @@ class A3C_Network:
         grads, _ = tf.clip_by_global_norm(self.gradients, 40.0)
 
         # apply the gradients
-        self.apply_gradients = self.trainer.apply_gradients(zip(grads, global_vars), global_step=self.global_episodes)
+        self.apply_gradients = self.trainer.apply_gradients(zip(grads, global_vars), global_step=self.global_train_step)
 
         self.merged = tf.summary.merge([
             tf.summary.scalar('loss', self.total_loss / bs),
@@ -123,8 +132,8 @@ class A3C_Network:
         ])
 
     def update_gradients(self, sess, batch_states, batch_actions_one_hot, batch_td, batch_R, thread_id):
-        summaries, grads, train_step, lr = sess.run([self.merged, self.apply_gradients, self.global_episodes, self.learning_rate],
-        feed_dict = {
+        summaries, grads, train_step, lr = sess.run([self.merged, self.apply_gradients, self.global_train_step, self.learning_rate],
+                                                    feed_dict = {
             self._input: batch_states,
             self._action: batch_actions_one_hot,
             self.td: batch_td,

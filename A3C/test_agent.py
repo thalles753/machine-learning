@@ -11,7 +11,8 @@ import tensorflow as tf
 parser = argparse.ArgumentParser()
 
 envarg = parser.add_argument_group('Environment')
-envarg.add_argument("--game_name", default="DemonAttack-v0", help="Atari game name to be used.")
+envarg.add_argument("--game_name", default="Breakout-v0", help="Atari game name to be used.")
+envarg.add_argument("--render", type=bool, default=True, help="Atari game name to be used.")
 envarg.add_argument('--mode', choices=['train', 'test'], default='test', help='Mode to run the agent.')
 envarg.add_argument("--frame_skip", type=int, default=4, help="How many times to repeat each chosen action.")
 envarg.add_argument("--screen_width", type=int, default=84, help="Screen width after resize.")
@@ -27,10 +28,6 @@ args = parser.parse_args()
 
 tf.reset_default_graph()
 
-config = tf.ConfigProto(
-        device_count = {'GPU': 0}
-    )
-
 model_path = os.path.join('./model/', args.game_name)
 if not os.path.exists(model_path):
     os.makedirs(model_path)
@@ -39,8 +36,8 @@ if not os.path.exists(model_path):
 env = gym.make(args.game_name)
 
 n_actions = env.action_space.n
-
-with tf.Session(config=config) as sess:
+global_frame_counter = 0
+with tf.Session() as sess:
 
     with tf.device("/cpu:0"):
         # create global network

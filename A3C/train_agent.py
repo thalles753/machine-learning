@@ -16,7 +16,7 @@ import random
 parser = argparse.ArgumentParser()
 
 envarg = parser.add_argument_group('Environment')
-envarg.add_argument("--game_name", default="DemonAttack-v0", help="Atari game name to be used.")
+envarg.add_argument("--game_name", default="Breakout-v0", help="Atari game name to be used.")
 envarg.add_argument('--mode', choices=['train', 'test'], default='train', help='Mode to run the agent.')
 envarg.add_argument('--render', type=bool, default=False, help='Should show the game images.')
 envarg.add_argument("--frame_skip", type=int, default=4, help="How many times to repeat each chosen action.")
@@ -40,8 +40,8 @@ mainarg.add_argument("--epoch_size", type=int, default=4000000, help="How many t
 mainarg.add_argument("--total_epochs", type=int, default=50, help="How many epochs to run.")
 
 # They ran it 320 million frames (= 80 million non-skipped frames) for one-day results,
-# 1 billion frames for four-day results - Assuming 4 frame skip
-mainarg.add_argument("--T_max", type=int, default=80000000, help="Total number of steps to train (measured in processed frames)")
+# 1 billion frames (250000000 million non-skipped frames) for four-day results - Assuming 4 frame skip
+mainarg.add_argument("--T_max", type=int, default=250000000, help="Total number of steps to train (measured in processed frames)")
 
 mainarg = parser.add_argument_group('Debugging variables')
 mainarg.add_argument("--average_episode_reward_stats_per_game", type=int, default=5, help="Show learning statistics after this number of epoch.")
@@ -72,7 +72,7 @@ config = tf.ConfigProto(
 
 with tf.device("/cpu:0"):
     global_episodes = tf.Variable(0, dtype=tf.int32, name='global_episodes_counter', trainable=False)
-    global_episode_counter = 0
+
     total_number_of_training_steps = args.T_max / args.t_max
     main_lock = Lock()
 
@@ -102,7 +102,7 @@ with tf.device("/cpu:0"):
         workers.append(Worker(args, thread_id, model_path, global_episodes,
                               global_network, trainer, main_lock, learning_rate))
 
-with tf.Session(config=config) as sess:
+with tf.Session() as sess:
 
     coord = tf.train.Coordinator()
     sess.run(tf.global_variables_initializer())

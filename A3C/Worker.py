@@ -7,24 +7,24 @@ import numpy as np
 import os
 import tensorflow as tf
 from Utils import display_transition
-
+from gym import wrappers
+from constants import T
 
 class Worker:
     # each worker has its own network and its own environment
-    def __init__(self, args, thread_id, model_path, global_counter, global_network, trainer, lock, learning_rate):
+    def __init__(self, args, thread_id, model_path, global_train_counter, global_network, trainer, lock, learning_rate):
         print "Creating worker: ", thread_id
         self.args = args
         self.thread_id = thread_id
         self.trainer = trainer
         self.model_path = model_path
-        self.global_counter = global_counter
+        self.global_train_counter = global_train_counter
         self.global_network = global_network
         self.scope = "worker_" + str(thread_id)
         self.state = None
         self.lives = None
         self.lock = lock
-        self.local_train_counter = 0
-        self.total_steps_per_thread = self.args.T_max / 8
+        self.T_max = self.args.T_max # total frames to train
 
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
@@ -32,6 +32,8 @@ class Worker:
         # with self.lock:
         # creates own worker agent environment
         self._env = gym.make(self.args.game_name)
+        if self.thread_id == 0 or self.args.mode == "test":
+           self._env.monitor.start('./results/videos/' + self.args.game_name + "/" + self.args.mode)
 
         # get the number of available actions
         self.n_actions = self._env.action_space.n
@@ -42,7 +44,7 @@ class Worker:
 
         # creates own worker agent network
         if self.args.mode == "train":
-            self.network = A3C_Network(args=args, output_size=self.n_actions, trainer=trainer, scope=self.scope, global_step=self.global_counter, learning_rate=learning_rate)
+            self.network = A3C_Network(args=args, output_size=self.n_actions, trainer=trainer, scope=self.scope, global_step=self.global_train_counter, learning_rate=learning_rate)
 
     # for the first step, the state is the same frame screen repeated [agent_history_length] times
     def game_initial_setup(self):
@@ -89,7 +91,8 @@ class Worker:
 
         for i_episode in range(self.args.T_max):
 
-            # self._env.render()
+            if self.args.render:
+                self._env.render()
 
             # Perform action a_t according to policy π(a_t|s_t; θ')
             policy = self.global_network.predict_policy(sess, np.expand_dims(self.state, axis=0))
@@ -117,8 +120,8 @@ class Worker:
     def work(self, sess, coordinator):
 
         with self.lock:
-            print "Thread:", self.thread_id, "has started. It will run:", self.total_steps_per_thread, "frames"
-
+            print "Thread:", self.thread_id, "has started."
+        global T # global frame counter
         episode_number = 0
         total_episode_reward = 0
         t = 0
@@ -147,9 +150,9 @@ class Worker:
                 total_episode_reward += reward
 
                 if self.args.mode == "train":
-                    is_terminal = self.process_lives()
+                    has_lost_life = self.process_lives()
 
-                if is_terminal:
+                if has_lost_life:
                     reward = -10.0
 
                 # create new state using
@@ -162,12 +165,17 @@ class Worker:
 
                 # store experiences
                 ex = [self.state, action_index, clipped_reward, value, is_terminal]
-                # display_transition(self._env.get_action_meanings(), ex)
+                # if self.thread_id == 0:
+                #     display_transition(self._env.get_action_meanings(), ex)
 
                 experiences.append(ex)
 
                 # update local thread counter
                 t += 1
+
+                # update global thread counter
+                # with self.lock:
+                T += 1
 
                 self.state = next_state
 
@@ -198,18 +206,19 @@ class Worker:
                     average_episode_reward = []
 
                 if self.thread_id == 0:
-                    print "Episode #", episode_number, "has finished. Local step:", t
+                    print "Episode #", episode_number, "has finished. Local step:", t, "Global step:", T
 
                 # reset environment
                 self.reset_game_env()
 
-            if t >= self.total_steps_per_thread:
+            if T >= self.T_max:
                 break
 
         if self.thread_id == 0 and self.args.mode == "train":
             self.network.sync_local_net(sess)
             self.save_model(sess)
 
+        self._env.monitor.close()
         print "Thread:", self.thread_id, "has finished."
 
     def compute_and_accumulate_rewards(self, R, experiences, sess):
@@ -242,7 +251,7 @@ class Worker:
             batch_td.append(td)
             batch_R.append(R)
 
-        self.local_train_counter = self.network.update_gradients(sess, batch_states, batch_actions_one_hot, batch_td, batch_R, self.thread_id)
+        _ = self.network.update_gradients(sess, batch_states, batch_actions_one_hot, batch_td, batch_R, self.thread_id)
 
     def compare_global_and_local_networks(self, sess):
         current_state = np.expand_dims(self.state, axis=0)
