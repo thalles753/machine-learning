@@ -10,7 +10,7 @@
 To run the algorithm using the default parameters
 
 ```
-$ python train_agent.py
+$ python train_agent.py 
 ```
 
 - The final model metadata will be saved at:
@@ -20,8 +20,7 @@ $ python train_agent.py
 
 ## Training
 
-The following graph shows the training performance (average score per episode) of our agent running the A3C algorithm on the DemonAttack game.
-Note that, each episode finishes when the agent losses a life, therefore the scores shown in the picture may not be directly comparable with other graphs where the episode finishes when the agent loses all of its lives.
+The following graph shows the training performance (average score per episode) of our agent running the A3C algorithm on the DemonAttack game using the openai gyn environment.
 
 ![Average score per episode](./results/average_score_per_episode.png)
 
