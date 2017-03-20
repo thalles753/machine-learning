@@ -46,30 +46,31 @@ class A3C_Network:
 
         normalized_input = tf.div(self._input, 255.0)
 
-        d = tf.divide(1.0, tf.sqrt(8. * 8. * 4.))
+        #d = tf.divide(1.0, tf.sqrt(8. * 8. * 4.))
         conv1 = slim.conv2d(normalized_input, 16, [8, 8], activation_fn=tf.nn.relu,
-                            padding='VALID', stride=4, biases_initializer=None,
-                            weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+                            padding='VALID', stride=4, biases_initializer=None)
+                            # weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
-        d = tf.divide(1.0, tf.sqrt(4. * 4. * 16.))
+        #d = tf.divide(1.0, tf.sqrt(4. * 4. * 16.))
         conv2 = slim.conv2d(conv1, 32, [4, 4], activation_fn=tf.nn.relu,
-                            padding='VALID', stride=2, biases_initializer=None,
-                            weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+                            padding='VALID', stride=2, biases_initializer=None)
+                            #weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
         flattened = slim.flatten(conv2)
 
-        d = tf.divide(1.0, tf.sqrt(2592.))
-        fc1 = slim.fully_connected(flattened, 256, activation_fn=tf.nn.relu, biases_initializer=None,
-                                   weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+        #d = tf.divide(1.0, tf.sqrt(2592.))
+        fc1 = slim.fully_connected(flattened, 256, activation_fn=tf.nn.relu, biases_initializer=None)
+                                   #weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
-        d = tf.divide(1.0, tf.sqrt(256.))
+        #d = tf.divide(1.0, tf.sqrt(256.))
         # estimate of the value function
-        self.value_func_prediction = slim.fully_connected(fc1, 1, activation_fn=None, biases_initializer=None,
-                                                          weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+        self.value_func_prediction = slim.fully_connected(fc1, 1, activation_fn=None, biases_initializer=None)
+                                                          #weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
         # softmax output with one entry per action representing the probability of taking an action
         self.policy_predictions = slim.fully_connected(fc1, self.output_size, activation_fn=tf.nn.softmax,
-                                                       biases_initializer=None, weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+                                                       biases_initializer=None)
+                                                       #weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
 
     def predict_values(self, sess, states):
         return sess.run(self.value_func_prediction, {self._input: states})[0][0]

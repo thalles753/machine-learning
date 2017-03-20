@@ -32,8 +32,9 @@ class Worker:
         # with self.lock:
         # creates own worker agent environment
         self._env = gym.make(self.args.game_name)
+
         if self.thread_id == 0 or self.args.mode == "test":
-           self._env.monitor.start('./results/videos/' + self.args.game_name + "/" + self.args.mode)
+            env = wrappers.Monitor(self._env, './results/videos/' + self.args.game_name + "/" + self.args.mode)
 
         # get the number of available actions
         self.n_actions = self._env.action_space.n
@@ -64,17 +65,17 @@ class Worker:
     def reset_game_env(self):
         # with self.lock:
         self._env.reset()
-        self.lives = self._env.ale.lives()
+        self.lives = self._env.env.ale.lives()
 
     def process_lives(self):
         terminal = False
-        if self._env.ale.lives() > self.lives:
-            self.lives = self._env.ale.lives()
+        if self._env.env.ale.lives() > self.lives:
+            self.lives = self._env.env.ale.lives()
 
         # Loosing a life will trigger a terminal signal in training mode.
         # We assume that a "life" IS an episode during training, but not during testing
-        elif self._env.ale.lives() < self.lives:
-            self.lives = self._env.ale.lives()
+        elif self._env.env.ale.lives() < self.lives:
+            self.lives = self._env.env.ale.lives()
             terminal = True
         return terminal
 

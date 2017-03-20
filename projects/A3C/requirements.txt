@@ -1,0 +1,22 @@
+atari-py==0.0.18
+cycler==0.10.0
+funcsigs==1.0.2
+functools32==3.2.3.post2
+-e git+https://github.com/openai/gym@2a0a2a3a2b4a50965e2e36271e66bab71326d68a#egg=gym
+matplotlib==2.0.0
+mock==2.0.0
+numpy==1.12.1
+olefile==0.44
+pbr==2.0.0
+Pillow==4.0.0
+protobuf==3.1.0.post1
+pyglet==1.2.4
+PyOpenGL==3.1.0
+pyparsing==2.2.0
+python-dateutil==2.6.0
+pytz==2016.10
+requests==2.13.0
+scipy==0.19.0
+six==1.10.0
+subprocess32==3.2.7
+tensorflow-gpu==1.0.1

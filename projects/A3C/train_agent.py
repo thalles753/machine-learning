@@ -41,7 +41,7 @@ mainarg.add_argument("--total_epochs", type=int, default=50, help="How many epoc
 
 # They ran it 320 million frames (= 80 million non-skipped frames) for one-day results,
 # 1 billion frames (250000000 million non-skipped frames) for four-day results - Assuming 4 frame skip
-mainarg.add_argument("--T_max", type=int, default=250000000, help="Total number of steps to train (measured in processed frames)")
+mainarg.add_argument("--T_max", type=int, default=160000000, help="Total number of steps to train (measured in processed frames)")
 
 mainarg = parser.add_argument_group('Debugging variables')
 mainarg.add_argument("--average_episode_reward_stats_per_game", type=int, default=5, help="Show learning statistics after this number of epoch.")
