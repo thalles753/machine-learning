@@ -8,6 +8,16 @@ from constants import GLOBAL_NETWORK_NAME
 # Asynchronous Advantage Actor-Critic (A3C)
 class A3C_Network:
     def __init__(self, args, output_size, trainer, scope, global_step=None, learning_rate=None):
+        """
+        Asynchronous Advantage Actor-Critic (A3C) class constructor
+        :param args: input arguments for the A3C algorithm
+        :param output_size: number of neurons for the output layer
+        :param trainer: Tensorflow's optimizer object e.g. Adam, rmsprop
+        :param scope: scope name for the tensorflow variables
+        :param global_step: Synchronized counter among the running threads
+        :param learning_rate: learning rate decay
+        :return: None
+        """
         self.args = args
         self.trainer = trainer
         self.scope_name = scope
@@ -35,47 +45,75 @@ class A3C_Network:
             self.episode_average_reward_summary = tf.summary.scalar('average_score_per_episode', self.episode_average_reward_input)
 
     def update_episode_average_reward(self, sess, average_score, game_number):
+        """
+        Writes the epsode reward average to tensorflow's tensorboard
+        :param sess: tensorflow session object
+        :param average_score: average score value to be logged on tensorboard
+        :param game_number: current game number
+        :return: None
+        """
         reward_summary = sess.run(self.episode_average_reward_summary,
                                   feed_dict={self.episode_average_reward_input: average_score})
         self.train_writer.add_summary(reward_summary, game_number)
 
 
 
-    # Build network as described in (Mnih et al., 2013)
     def _build_graph(self):
-
+        """
+        Build network as described in (Mnih et al., 2013)
+        """
         normalized_input = tf.div(self._input, 255.0)
 
-        #d = tf.divide(1.0, tf.sqrt(8. * 8. * 4.))
-        conv1 = slim.conv2d(normalized_input, 16, [8, 8], activation_fn=tf.nn.relu,
-                            padding='VALID', stride=4, biases_initializer=None)
-                            # weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+        self.img_summary = tf.summary.image("game_screen", normalized_input, max_outputs=5, collections=None)
 
-        #d = tf.divide(1.0, tf.sqrt(4. * 4. * 16.))
+        n = 8 * 8 * 4
+        conv1 = slim.conv2d(normalized_input, 16, [8, 8], activation_fn=tf.nn.relu,
+                            padding='VALID', stride=4, biases_initializer=None, scope="conv1",
+                            weights_initializer=np.random.randn(n) * np.sqrt(2.0/n))
+        self.conv1_summary = tf.summary.histogram("conv1", conv1)
+
+
+        n = 4 * 4 * 16
         conv2 = slim.conv2d(conv1, 32, [4, 4], activation_fn=tf.nn.relu,
-                            padding='VALID', stride=2, biases_initializer=None)
-                            #weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+                            padding='VALID', stride=2, biases_initializer=None, scope="conv2",
+                            weights_initializer=np.random.randn(n) * np.sqrt(2.0/n))
+        self.conv2_summary = tf.summary.histogram("conv2", conv2)
+
 
         flattened = slim.flatten(conv2)
 
-        #d = tf.divide(1.0, tf.sqrt(2592.))
-        fc1 = slim.fully_connected(flattened, 256, activation_fn=tf.nn.relu, biases_initializer=None)
-                                   #weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+        n = 2592
+        fc1 = slim.fully_connected(flattened, 256, activation_fn=tf.nn.relu, biases_initializer=None, scope="fc1",
+                                   weights_initializer=np.random.randn(n) * np.sqrt(2.0/n))
+        self.fc1_summary = tf.summary.histogram("fc1", fc1)
 
-        #d = tf.divide(1.0, tf.sqrt(256.))
         # estimate of the value function
-        self.value_func_prediction = slim.fully_connected(fc1, 1, activation_fn=None, biases_initializer=None)
-                                                          #weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+        n = 256
+        self.value_func_prediction = slim.fully_connected(fc1, 1, activation_fn=None, biases_initializer=None, scope="value_func",
+                                                          weights_initializer=np.random.randn(n) * np.sqrt(2.0/n))
 
         # softmax output with one entry per action representing the probability of taking an action
         self.policy_predictions = slim.fully_connected(fc1, self.output_size, activation_fn=tf.nn.softmax,
-                                                       biases_initializer=None)
-                                                       #weights_initializer=tf.random_uniform_initializer(minval=-d, maxval=d))
+                                                       biases_initializer=None, scope="policy_func",
+                                                       weights_initializer=np.random.randn(n) * np.sqrt(2.0/n))
+
+        self.value_summary = tf.summary.histogram("value_func", self.value_func_prediction)
+        self.policy_summary = tf.summary.histogram("policy", self.policy_predictions)
+
+
+    def _initi_weights(self, n):
+        np.random.randn(n) * sqrt(2.0/n)
 
     def predict_values(self, sess, states):
+        """
+        Forward pass to get the value function values
+        """
         return sess.run(self.value_func_prediction, {self._input: states})[0][0]
 
     def predict_policy(self, sess, states):
+        """
+        Forward pass to get the policy function values
+        """
         return sess.run(self.policy_predictions, {self._input: states})[0]
 
     def predict_policy_and_values(self, sess, states):
@@ -129,7 +167,13 @@ class A3C_Network:
             tf.summary.scalar('loss', self.total_loss / bs),
             tf.summary.scalar("value_loss", value_loss / bs),
             tf.summary.scalar('policy_loss', policy_loss / bs),
-            tf.summary.scalar('learning_rate', self.learning_rate)
+            tf.summary.scalar('learning_rate', self.learning_rate),
+            self.conv1_summary,
+            self.conv2_summary,
+            self.fc1_summary,
+            self.value_summary,
+            self.policy_summary,
+            self.img_summary
         ])
 
     def update_gradients(self, sess, batch_states, batch_actions_one_hot, batch_td, batch_R, thread_id):

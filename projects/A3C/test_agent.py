@@ -11,7 +11,7 @@ import tensorflow as tf
 parser = argparse.ArgumentParser()
 
 envarg = parser.add_argument_group('Environment')
-envarg.add_argument("--game_name", default="Breakout-v0", help="Atari game name to be used.")
+envarg.add_argument("--game_name", default="SpaceInvaders-v0", help="Atari game name to be used.")
 envarg.add_argument("--render", type=bool, default=True, help="Atari game name to be used.")
 envarg.add_argument('--mode', choices=['train', 'test'], default='test', help='Mode to run the agent.')
 envarg.add_argument("--frame_skip", type=int, default=4, help="How many times to repeat each chosen action.")
@@ -19,6 +19,7 @@ envarg.add_argument("--screen_width", type=int, default=84, help="Screen width a
 envarg.add_argument("--screen_height", type=int, default=84, help="Screen height after resize.")
 envarg.add_argument("--agent_history_length", type=int, default=4, help="The number of most recent frames experienced by the agent that are given as input to the Q network.")
 envarg.add_argument("--T_max", type=int, default=10000000, help="Total number of steps to train (measured in processed frames)")
+envarg.add_argument("--max_frames", type=bool, default=True, help="Whether or not to perform a max function between the two consecutive frames.")
 
 mainarg = parser.add_argument_group('Debugging variables')
 mainarg.add_argument("--average_episode_reward_stats_per_game", type=int, default=5, help="Show learning statistics after this number of epoch.")

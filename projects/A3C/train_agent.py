@@ -16,7 +16,7 @@ import random
 parser = argparse.ArgumentParser()
 
 envarg = parser.add_argument_group('Environment')
-envarg.add_argument("--game_name", default="Breakout-v0", help="Atari game name to be used.")
+envarg.add_argument("--game_name", default="Pong-v0", help="Atari game name to be used.")
 envarg.add_argument('--mode', choices=['train', 'test'], default='train', help='Mode to run the agent.')
 envarg.add_argument('--render', type=bool, default=False, help='Should show the game images.')
 envarg.add_argument("--frame_skip", type=int, default=4, help="How many times to repeat each chosen action.")
@@ -34,6 +34,7 @@ netarg.add_argument("--min_reward", type=float, default=-1.0, help="Minimum rewa
 netarg.add_argument("--max_reward", type=float, default=1.0, help="Maximum reward.")
 netarg.add_argument("--entropy_regularization", type=float, default=0.01, help="Maximum reward.")
 netarg.add_argument("--t_max", type=int, default=5, help="Perform training after this many game steps.")
+netarg.add_argument("--max_frames", type=bool, default=False, help="Whether or not to perform a max function between the two consecutive frames.")
 
 mainarg = parser.add_argument_group('Main loop')
 mainarg.add_argument("--epoch_size", type=int, default=4000000, help="How many training steps per epoch.")
@@ -41,7 +42,7 @@ mainarg.add_argument("--total_epochs", type=int, default=50, help="How many epoc
 
 # They ran it 320 million frames (= 80 million non-skipped frames) for one-day results,
 # 1 billion frames (250000000 million non-skipped frames) for four-day results - Assuming 4 frame skip
-mainarg.add_argument("--T_max", type=int, default=160000000, help="Total number of steps to train (measured in processed frames)")
+mainarg.add_argument("--T_max", type=int, default=80000000, help="Total number of steps to train (measured in processed frames)")
 
 mainarg = parser.add_argument_group('Debugging variables')
 mainarg.add_argument("--average_episode_reward_stats_per_game", type=int, default=5, help="Show learning statistics after this number of epoch.")
@@ -83,6 +84,7 @@ with tf.device("/cpu:0"):
 
     print "Optimizer algorithm:", args.optimizer
     print "Learning rate:", args.learning_rate
+    print "Performing max:", args.max_frames
     if args.optimizer == 'rmsprop':
         trainer = tf.train.RMSPropOptimizer(learning_rate=learning_rate, decay=args.decay_rate,
                                             momentum=0.0, epsilon=args.epsilon)

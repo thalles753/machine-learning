@@ -25,6 +25,7 @@ class Worker:
         self.lives = None
         self.lock = lock
         self.T_max = self.args.T_max # total frames to train
+        self.last_observation = None
 
         # Add ops to save and restore all the variables.
         self.saver = tf.train.Saver()
@@ -33,9 +34,12 @@ class Worker:
         # creates own worker agent environment
         self._env = gym.make(self.args.game_name)
 
-        if self.thread_id == 0 or self.args.mode == "test":
-            env = wrappers.Monitor(self._env, './results/videos/' + self.args.game_name + "/" + self.args.mode)
+        self._env_ref = self._env.env
 
+        if thread_id == 0:
+            self._env = wrappers.Monitor(self._env, './results/videos/' + self.args.game_name + "/" + self.args.mode, force=True)
+            self._env_ref = self._env.unwrapped
+            
         # get the number of available actions
         self.n_actions = self._env.action_space.n
 
@@ -51,9 +55,11 @@ class Worker:
     def game_initial_setup(self):
         frame, _, _, _ = self._env.step(0)
         processed_frame = process_input(frame, self.args.screen_width, self.args.screen_height)
+        self.last_observation = processed_frame
         self.state = np.stack(tuple(processed_frame for _ in range(self.args.agent_history_length)), axis=2)
         assert(self.state.shape == (self.args.screen_width, self.args.screen_height, self.args.agent_history_length))
-        self._env.frameskip = self.args.frame_skip
+
+        self._env.env.frameskip = self.args.frame_skip
         print "Game setup and ready to go!"
 
     # Select a random action based on the current policy function probabilities
@@ -65,17 +71,17 @@ class Worker:
     def reset_game_env(self):
         # with self.lock:
         self._env.reset()
-        self.lives = self._env.env.ale.lives()
+        self.lives = self._env_ref.ale.lives()
 
     def process_lives(self):
         terminal = False
-        if self._env.env.ale.lives() > self.lives:
-            self.lives = self._env.env.ale.lives()
+        if self._env_ref.ale.lives() > self.lives:
+            self.lives = self._env_ref.ale.lives()
 
         # Loosing a life will trigger a terminal signal in training mode.
         # We assume that a "life" IS an episode during training, but not during testing
-        elif self._env.env.ale.lives() < self.lives:
-            self.lives = self._env.env.ale.lives()
+        elif self._env_ref.ale.lives() < self.lives:
+            self.lives = self._env_ref.ale.lives()
             terminal = True
         return terminal
 
@@ -103,7 +109,19 @@ class Worker:
             total_episode_reward += reward
 
             # create new state using
-            new_observation = np.expand_dims(process_input(observation), axis=2)  # 84 x 84 x 1
+            new_observation = process_input(observation)
+
+            # perform max function between the two last consecutive frames
+            #if self.args.max_frames:
+            #    new_observation = np.maximum(processed_observation, self.last_observation)
+            #else:
+            # new_observation = processed_observation
+
+            # save the last observation. Make sure not to include the observation without
+            # the maximum operation
+            # self.last_observation = processed_observation
+
+            new_observation = np.expand_dims(new_observation, axis=2)  # 84 x 84 x 1
             next_state = np.array(self.state[:, :, 1:], copy=True)
             next_state = np.append(next_state, new_observation, axis=2)
 
@@ -122,6 +140,10 @@ class Worker:
 
         with self.lock:
             print "Thread:", self.thread_id, "has started."
+
+        if self.thread_id == 0:
+            self.network.train_writer.add_graph(sess.graph)
+
         global T # global frame counter
         episode_number = 0
         total_episode_reward = 0
@@ -166,8 +188,8 @@ class Worker:
 
                 # store experiences
                 ex = [self.state, action_index, clipped_reward, value, is_terminal]
-                # if self.thread_id == 0:
-                #     display_transition(self._env.get_action_meanings(), ex)
+                #if self.thread_id == 0:
+                #    display_transition(self._env.unwrapped.get_action_meanings(), ex)
 
                 experiences.append(ex)
 
@@ -219,7 +241,6 @@ class Worker:
             self.network.sync_local_net(sess)
             self.save_model(sess)
 
-        self._env.monitor.close()
         print "Thread:", self.thread_id, "has finished."
 
     def compute_and_accumulate_rewards(self, R, experiences, sess):

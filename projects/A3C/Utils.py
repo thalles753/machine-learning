@@ -1,5 +1,6 @@
 from scipy import misc
 import matplotlib.pyplot as plt
+from threading import *
 
 # returns a 84 x 84 image tensor as described in the deep minds paper
 def process_input(img, width=84, height=84):
